@@ -18,24 +18,6 @@ const CheckIcon = () => (
   </svg>
 );
 
-// 로또 공 컴포넌트
-const LottoBall = ({ number, size = 'normal' }) => {
-  const colors = getBallColor(number);
-  const sizeClass = size === 'small' ? 'saved-balls' : '';
-  
-  return (
-    <span 
-      className="ball"
-      style={{ 
-        backgroundColor: colors.bg, 
-        color: colors.text 
-      }}
-    >
-      {number}
-    </span>
-  );
-};
-
 // 토스트 컴포넌트
 const Toast = ({ message, visible, icon = '✓' }) => (
   <div className={`toast ${visible ? 'visible' : ''}`}>
@@ -55,19 +37,19 @@ const StatCard = ({ value, label }) => (
 // 도넛 차트 컴포넌트
 const DonutChart = ({ value, total, label, primaryLabel, secondaryLabel }) => {
   const percentage = (value / total) * 100;
-  const circumference = 2 * Math.PI * 48;
+  const circumference = 2 * Math.PI * 45;
   const offset = circumference - (percentage / 100) * circumference;
   
   return (
     <div className="donut-container">
       <div className="donut-chart">
-        <svg width="120" height="120" viewBox="0 0 120 120">
-          <circle className="donut-bg" cx="60" cy="60" r="48" />
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <circle className="donut-bg" cx="55" cy="55" r="45" />
           <circle 
             className="donut-fill" 
-            cx="60" 
-            cy="60" 
-            r="48"
+            cx="55" 
+            cy="55" 
+            r="45"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
           />
@@ -100,7 +82,7 @@ const BarChart = ({ data, maxValue }) => (
         <div className="bar-track">
           <div 
             className="bar-fill"
-            style={{ width: `${Math.max((value / maxValue) * 100, 10)}%` }}
+            style={{ width: `${Math.max((value / maxValue) * 100, 12)}%` }}
           >
             {value}
           </div>
@@ -109,6 +91,86 @@ const BarChart = ({ data, maxValue }) => (
     ))}
   </div>
 );
+
+// 번호 선택 드롭다운 컴포넌트
+const NumberSelector = ({ 
+  label, 
+  icon,
+  selectedNumbers, 
+  disabledNumbers, 
+  onToggle, 
+  onClear,
+  tagClass,
+  isActive,
+  onActivate 
+}) => {
+  const wrapperRef = useRef(null);
+  const [dropdownPosition, setDropdownPosition] = useState('bottom');
+
+  // 드롭다운 위치 계산
+  useEffect(() => {
+    if (isActive && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const dropdownHeight = 280; // 예상 드롭다운 높이
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+        setDropdownPosition('top');
+      } else {
+        setDropdownPosition('bottom');
+      }
+    }
+  }, [isActive]);
+
+  return (
+    <div className="input-group">
+      <div className="input-label">
+        <span className="input-label-text">{icon} {label}</span>
+        {selectedNumbers.length > 0 && (
+          <button className="clear-btn" onClick={onClear}>
+            초기화
+          </button>
+        )}
+      </div>
+      <div className="input-wrapper" ref={wrapperRef}>
+        <div 
+          className={`selector-box ${isActive ? 'active' : ''}`}
+          onClick={onActivate}
+        >
+          {selectedNumbers.length ? (
+            selectedNumbers.map(n => (
+              <span key={n} className={`number-tag ${tagClass}`}>{n}</span>
+            ))
+          ) : (
+            <span className="selector-placeholder">클릭하여 번호 선택...</span>
+          )}
+        </div>
+        
+        {isActive && (
+          <div className={`dropdown-grid position-${dropdownPosition}`}>
+            <div className="number-grid">
+              {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
+                <button
+                  key={n}
+                  className={`grid-number ${selectedNumbers.includes(n) ? 'selected' : ''} ${disabledNumbers.includes(n) ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle(n);
+                  }}
+                  disabled={disabledNumbers.includes(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function Home() {
   // 상태 관리
@@ -128,7 +190,7 @@ export default function Home() {
     f5: true, f6: true, f7: true, f8: true
   });
 
-  const selectorRef = useRef(null);
+  const containerRef = useRef(null);
 
   // 로컬 스토리지에서 저장된 조합 불러오기
   useEffect(() => {
@@ -150,7 +212,7 @@ export default function Home() {
   // 외부 클릭 감지
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (selectorRef.current && !selectorRef.current.contains(e.target)) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
         setActiveSelector(null);
       }
     };
@@ -210,33 +272,27 @@ export default function Home() {
   };
 
   // 번호 선택 토글
-  const toggleNumber = (num, type) => {
-    if (type === 'include') {
-      if (excludeNumbers.includes(num)) return;
-      setIncludeNumbers(prev => 
-        prev.includes(num) 
-          ? prev.filter(n => n !== num)
-          : [...prev, num].sort((a, b) => a - b)
-      );
-    } else {
-      if (includeNumbers.includes(num)) return;
-      setExcludeNumbers(prev => 
-        prev.includes(num) 
-          ? prev.filter(n => n !== num)
-          : [...prev, num].sort((a, b) => a - b)
-      );
-    }
+  const toggleInclude = (num) => {
+    if (excludeNumbers.includes(num)) return;
+    setIncludeNumbers(prev => 
+      prev.includes(num) 
+        ? prev.filter(n => n !== num)
+        : [...prev, num].sort((a, b) => a - b)
+    );
+  };
+
+  const toggleExclude = (num) => {
+    if (includeNumbers.includes(num)) return;
+    setExcludeNumbers(prev => 
+      prev.includes(num) 
+        ? prev.filter(n => n !== num)
+        : [...prev, num].sort((a, b) => a - b)
+    );
   };
 
   // 필터 토글
   const toggleFilter = (key) => {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // 선택 초기화
-  const clearSelection = (type) => {
-    if (type === 'include') setIncludeNumbers([]);
-    else setExcludeNumbers([]);
   };
 
   // 조합이 저장되었는지 확인
@@ -285,102 +341,43 @@ export default function Home() {
       {/* 헤더 */}
       <header className="header">
         <div className="logo">
-          <div className="logo-icon">🎰</div>
-          <h1 className="brand-name">FortunaPick</h1>
+          <div className="logo-icon">🎯</div>
+          <h1 className="brand-name">Fortuna<span>Pick</span></h1>
         </div>
-        <p className="tagline">Premium Algorithm Combination Engine</p>
+        <p className="tagline">스마트 번호 조합 추천 서비스</p>
       </header>
 
       {/* 메인 그리드 */}
-      <div className="main-grid" ref={selectorRef}>
+      <div className="main-grid" ref={containerRef}>
         {/* 설정 패널 */}
         <aside className="settings-panel">
-          {/* 필수 포함 번호 */}
+          {/* 번호 선택 카드 */}
           <div className="card">
             <div className="card-content">
-              <div className="input-group">
-                <div className="input-label">
-                  <span className="input-label-text">📌 필수 포함 번호</span>
-                  {includeNumbers.length > 0 && (
-                    <button className="clear-btn" onClick={() => clearSelection('include')}>
-                      초기화
-                    </button>
-                  )}
-                </div>
-                <div className="input-wrapper">
-                  <div 
-                    className={`selector-box ${activeSelector === 'include' ? 'active' : ''}`}
-                    onClick={() => setActiveSelector(activeSelector === 'include' ? null : 'include')}
-                  >
-                    {includeNumbers.length ? (
-                      includeNumbers.map(n => (
-                        <span key={n} className="number-tag include">{n}</span>
-                      ))
-                    ) : (
-                      <span className="selector-placeholder">클릭하여 번호 선택...</span>
-                    )}
-                  </div>
-                  
-                  {activeSelector === 'include' && (
-                    <div className="dropdown-grid">
-                      <div className="number-grid">
-                        {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
-                          <button
-                            key={n}
-                            className={`grid-number ${includeNumbers.includes(n) ? 'selected' : ''} ${excludeNumbers.includes(n) ? 'disabled' : ''}`}
-                            onClick={() => toggleNumber(n, 'include')}
-                            disabled={excludeNumbers.includes(n)}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <NumberSelector
+                label="필수 포함 번호"
+                icon="📌"
+                selectedNumbers={includeNumbers}
+                disabledNumbers={excludeNumbers}
+                onToggle={toggleInclude}
+                onClear={() => setIncludeNumbers([])}
+                tagClass="include"
+                isActive={activeSelector === 'include'}
+                onActivate={() => setActiveSelector(activeSelector === 'include' ? null : 'include')}
+              />
 
-              {/* 제외 번호 */}
-              <div className="input-group" style={{ marginTop: 24 }}>
-                <div className="input-label">
-                  <span className="input-label-text">🚫 제외 대상 번호</span>
-                  {excludeNumbers.length > 0 && (
-                    <button className="clear-btn" onClick={() => clearSelection('exclude')}>
-                      초기화
-                    </button>
-                  )}
-                </div>
-                <div className="input-wrapper">
-                  <div 
-                    className={`selector-box ${activeSelector === 'exclude' ? 'active' : ''}`}
-                    onClick={() => setActiveSelector(activeSelector === 'exclude' ? null : 'exclude')}
-                  >
-                    {excludeNumbers.length ? (
-                      excludeNumbers.map(n => (
-                        <span key={n} className="number-tag exclude">{n}</span>
-                      ))
-                    ) : (
-                      <span className="selector-placeholder">클릭하여 번호 선택...</span>
-                    )}
-                  </div>
-                  
-                  {activeSelector === 'exclude' && (
-                    <div className="dropdown-grid">
-                      <div className="number-grid">
-                        {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
-                          <button
-                            key={n}
-                            className={`grid-number ${excludeNumbers.includes(n) ? 'selected' : ''} ${includeNumbers.includes(n) ? 'disabled' : ''}`}
-                            onClick={() => toggleNumber(n, 'exclude')}
-                            disabled={includeNumbers.includes(n)}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+              <div style={{ marginTop: 20 }}>
+                <NumberSelector
+                  label="제외 대상 번호"
+                  icon="🚫"
+                  selectedNumbers={excludeNumbers}
+                  disabledNumbers={includeNumbers}
+                  onToggle={toggleExclude}
+                  onClear={() => setExcludeNumbers([])}
+                  tagClass="exclude"
+                  isActive={activeSelector === 'exclude'}
+                  onActivate={() => setActiveSelector(activeSelector === 'exclude' ? null : 'exclude')}
+                />
               </div>
             </div>
           </div>
@@ -391,7 +388,7 @@ export default function Home() {
               <div className="filter-header-left">
                 <div className="filter-icon">⚙️</div>
                 <div className="filter-header-text">
-                  <h4>정밀 필터링 조건</h4>
+                  <h4>필터링 조건 설정</h4>
                   <span>{activeFilterCount}개 필터 활성화</span>
                 </div>
               </div>
@@ -449,13 +446,13 @@ export default function Home() {
           >
             {loading ? (
               <>
-                <span className="loading-spinner" style={{ width: 24, height: 24, borderWidth: 3 }}></span>
+                <span className="loading-spinner" style={{ width: 22, height: 22, borderWidth: 2 }}></span>
                 <span>분석 중...</span>
               </>
             ) : (
               <>
                 <span className="generate-btn-icon">✨</span>
-                <span>최적 조합 추출</span>
+                <span>조합 추출하기</span>
               </>
             )}
           </button>
@@ -470,7 +467,7 @@ export default function Home() {
                 </div>
                 <span className="saved-count">{savedCombinations.length}</span>
               </div>
-              <div className="card-content" style={{ padding: 16 }}>
+              <div className="card-content" style={{ padding: 14 }}>
                 <div className="saved-list">
                   {savedCombinations.map((combo, idx) => (
                     <div key={idx} className="saved-item">
@@ -484,9 +481,9 @@ export default function Home() {
                               style={{ 
                                 backgroundColor: colors.bg, 
                                 color: colors.text,
-                                width: 36,
-                                height: 36,
-                                fontSize: '0.85rem'
+                                width: 32,
+                                height: 32,
+                                fontSize: '0.8rem'
                               }}
                             >
                               {num}
@@ -684,10 +681,10 @@ export default function Home() {
             <div className="card">
               <div className="empty-state">
                 <div className="empty-icon">🎲</div>
-                <div className="empty-title">조합을 생성해 보세요</div>
+                <div className="empty-title">번호 조합을 생성해보세요</div>
                 <div className="empty-desc">
                   필수 포함 번호를 선택하고 필터링 조건을 설정한 후
-                  '최적 조합 추출' 버튼을 클릭하세요.
+                  '조합 추출하기' 버튼을 클릭하세요.
                 </div>
               </div>
             </div>
