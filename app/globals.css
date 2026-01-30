@@ -1,15 +1,63 @@
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding: 20px; }
-.container { max-width: 600px; margin: 0 auto; }
-.title { text-align: center; color: #1a1a1a; margin-bottom: 30px; }
-.card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-.input-group { margin-bottom: 15px; }
-.input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
-.input-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-.btn { width: 100%; padding: 15px; background: #0070f3; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-.btn:hover { background: #0051a2; }
-.btn:disabled { background: #ccc; cursor: not-allowed; }
-.result-area { margin-top: 30px; }
-.summary { text-align: center; font-size: 18px; margin-bottom: 20px; }
-.lotto-row { background: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.row-num { color: #999; font-size: 12px; margin-right: 5px; width: 20px; }
-.ball { width: 35px; height: 35px; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+/* 기본 설정 */
+body { margin: 0; padding: 0; font-family: 'Pretendard', -apple-system, sans-serif; background-color: #121212; color: #e0e0e0; }
+* { box-sizing: border-box; }
+
+/* 메인 레이아웃 */
+.main-container { max-width: 1000px; margin: 0 auto; padding: 20px; min-height: 100vh; }
+.header { text-align: center; margin-bottom: 40px; padding-top: 20px; }
+.brand-logo { font-size: 2.5rem; margin: 0; color: #d4af37; /* Gold */ letter-spacing: -1px; text-transform: uppercase; }
+.subtitle { color: #888; margin-top: 5px; font-size: 0.9rem; }
+
+/* 컨텐츠 그리드 (데스크탑: 2열, 모바일: 1열) */
+.content-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+@media (max-width: 768px) { .content-wrapper { grid-template-columns: 1fr; } }
+
+/* 카드 스타일 */
+.section-card { background: #1e1e1e; border: 1px solid #333; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+.section-title { margin-top: 0; color: #d4af37; font-size: 1rem; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+
+/* 숫자 선택기 (Combobox 느낌) */
+.selector-container { position: relative; margin-bottom: 10px; }
+.input-label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 6px; }
+.selector-box { background: #2a2a2a; border: 1px solid #444; padding: 10px; border-radius: 6px; min-height: 45px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.selector-box:hover { border-color: #d4af37; }
+.placeholder { color: #666; font-size: 0.9rem; }
+.chip-container { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { background: #d4af37; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+.arrow { color: #666; font-size: 0.8rem; }
+
+/* 숫자 그리드 팝업 */
+.number-grid-dropdown { position: absolute; top: 100%; left: 0; width: 100%; background: #2a2a2a; border: 1px solid #d4af37; z-index: 100; padding: 10px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; border-radius: 0 0 8px 8px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+.grid-btn { padding: 8px 0; background: #333; border: none; color: #fff; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+.grid-btn:hover { background: #444; }
+.grid-btn.active { background: #d4af37; color: #000; font-weight: bold; }
+.grid-btn.disabled { opacity: 0.2; cursor: not-allowed; }
+
+/* 필터 체크박스 */
+.filter-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.checkbox-item { display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 4px; transition: background 0.2s; }
+.checkbox-item:hover { background: #252525; }
+.checkbox-item input { margin-right: 10px; accent-color: #d4af37; width: 16px; height: 16px; }
+.checkbox-item span { font-size: 0.9rem; color: #ccc; }
+.simple-input { width: 100%; padding: 8px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; }
+
+/* 액션 버튼 */
+.action-btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #d4af37, #aa8c2c); color: #000; font-weight: 800; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3); transition: transform 0.1s; }
+.action-btn:active { transform: scale(0.98); }
+.action-btn:disabled { background: #444; color: #888; cursor: not-allowed; box-shadow: none; }
+
+/* 결과 영역 */
+.result-panel { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 20px; min-height: 400px; display: flex; flex-direction: column; }
+.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #555; }
+.logo-placeholder { font-size: 5rem; font-weight: bold; opacity: 0.1; margin-bottom: 20px; }
+
+.result-content { animation: fadeIn 0.5s; }
+.result-title { text-align: center; color: #fff; margin-top: 0; }
+.result-summary { text-align: center; color: #888; font-size: 0.9rem; margin-bottom: 30px; }
+
+.lotto-row { display: flex; align-items: center; margin-bottom: 15px; background: #252525; padding: 12px; border-radius: 50px; border: 1px solid #333; }
+.row-badge { background: #333; color: #d4af37; padding: 5px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; margin-right: 15px; white-space: nowrap; }
+.balls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; flex: 1; }
+.ball { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3); box-shadow: inset 0 -3px 5px rgba(0,0,0,0.2); font-size: 0.9rem; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
