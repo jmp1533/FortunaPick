@@ -1,13 +1,21 @@
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  getBallColor, 
   FILTER_DEFINITIONS, 
   calculateAC, 
   getOddEvenRatio, 
   getDecadeDistribution,
   getSum
 } from './utils/constants';
+
+// 공 색상 클래스 반환
+const getBallColorClass = (num) => {
+  if (num <= 10) return 'ball-yellow';
+  if (num <= 20) return 'ball-blue';
+  if (num <= 30) return 'ball-red';
+  if (num <= 40) return 'ball-gray';
+  return 'ball-green';
+};
 
 // SVG 아이콘 컴포넌트들
 const Icons = {
@@ -53,21 +61,21 @@ const Icons = {
       <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
     </svg>
   ),
-  Chart: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-    </svg>
-  ),
   Grid: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
     </svg>
-  ),
-  X: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
   )
+};
+
+// 동행복권 스타일 로또 공 컴포넌트
+const LottoBall = ({ number, small = false }) => {
+  const colorClass = getBallColorClass(number);
+  return (
+    <span className={`lotto-ball ${colorClass} ${small ? 'small' : ''}`}>
+      {number}
+    </span>
+  );
 };
 
 // 토스트 컴포넌트
@@ -143,50 +151,81 @@ const BarChart = ({ data, maxValue }) => (
   </div>
 );
 
-// 번호 선택 모달 컴포넌트
-const NumberModal = ({ 
-  isOpen, 
-  onClose, 
-  title, 
+// 콤보박스 드롭다운 컴포넌트
+const NumberComboBox = ({ 
+  label, 
   selectedNumbers, 
   disabledNumbers, 
-  onToggle 
+  onToggle, 
+  onClear,
+  tagClass,
+  isOpen,
+  onToggleOpen
 }) => {
-  if (!isOpen) return null;
+  const wrapperRef = useRef(null);
+  const [position, setPosition] = useState('bottom');
+
+  // 드롭다운 위치 계산
+  useEffect(() => {
+    if (isOpen && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const dropdownHeight = 220;
+      const spaceBelow = window.innerHeight - rect.bottom - 20;
+      const spaceAbove = rect.top - 20;
+      
+      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+        setPosition('top');
+      } else {
+        setPosition('bottom');
+      }
+    }
+  }, [isOpen]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="number-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <span className="modal-title">{title}</span>
-          <button className="modal-close" onClick={onClose}>
-            <Icons.X />
-          </button>
-        </div>
-        <div className="modal-content">
-          <div className="number-grid">
-            {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
-              <button
-                key={n}
-                className={`grid-number ${selectedNumbers.includes(n) ? 'selected' : ''} ${disabledNumbers.includes(n) ? 'disabled' : ''}`}
-                onClick={() => onToggle(n)}
-                disabled={disabledNumbers.includes(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button className="modal-btn secondary" onClick={() => {
-            selectedNumbers.forEach(n => onToggle(n));
-          }}>
+    <div className="input-group">
+      <div className="input-label">
+        <span className="input-label-text">{label}</span>
+        {selectedNumbers.length > 0 && (
+          <button className="clear-btn" onClick={(e) => { e.stopPropagation(); onClear(); }}>
             초기화
           </button>
-          <button className="modal-btn primary" onClick={onClose}>
-            확인
-          </button>
+        )}
+      </div>
+      <div className="combo-wrapper" ref={wrapperRef}>
+        <div 
+          className={`selector-box ${isOpen ? 'active' : ''}`}
+          onClick={onToggleOpen}
+        >
+          {selectedNumbers.length ? (
+            selectedNumbers.map(n => (
+              <span key={n} className={`number-tag ${tagClass}`}>{n}</span>
+            ))
+          ) : (
+            <span className="selector-placeholder">클릭하여 번호 선택...</span>
+          )}
         </div>
+        
+        {isOpen && (
+          <div className={`dropdown-panel position-${position}`}>
+            <div className="number-grid">
+              {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
+                <button
+                  key={n}
+                  className={`grid-number ${selectedNumbers.includes(n) ? 'selected' : ''} ${disabledNumbers.includes(n) ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!disabledNumbers.includes(n)) {
+                      onToggle(n);
+                    }
+                  }}
+                  disabled={disabledNumbers.includes(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -198,7 +237,7 @@ export default function Home() {
   const [excludeNumbers, setExcludeNumbers] = useState([]);
   const [minAc, setMinAc] = useState(5);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState(null);
+  const [openCombo, setOpenCombo] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [savedCombinations, setSavedCombinations] = useState([]);
@@ -209,6 +248,8 @@ export default function Home() {
     f1: true, f2: true, f3: true, f4: true, 
     f5: true, f6: true, f7: true, f8: true
   });
+
+  const mainRef = useRef(null);
 
   // 로컬 스토리지에서 저장된 조합 불러오기
   useEffect(() => {
@@ -226,6 +267,17 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
+
+  // 외부 클릭 감지하여 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (mainRef.current && !e.target.closest('.combo-wrapper')) {
+        setOpenCombo(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // 토스트 표시 함수
   const showToast = useCallback((message) => {
@@ -302,6 +354,11 @@ export default function Home() {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // 콤보박스 토글
+  const handleComboToggle = (comboName) => {
+    setOpenCombo(prev => prev === comboName ? null : comboName);
+  };
+
   // 조합이 저장되었는지 확인
   const isSaved = (combo) => {
     return savedCombinations.some(s => s.join('-') === combo.join('-'));
@@ -344,7 +401,7 @@ export default function Home() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   return (
-    <div className="app-container">
+    <div className="app-container" ref={mainRef}>
       {/* 헤더 */}
       <header className="header">
         <div className="logo">
@@ -363,52 +420,28 @@ export default function Home() {
           {/* 번호 선택 카드 */}
           <div className="card">
             <div className="card-content">
-              {/* 필수 포함 번호 */}
-              <div className="input-group">
-                <div className="input-label">
-                  <span className="input-label-text">필수 포함 번호</span>
-                  {includeNumbers.length > 0 && (
-                    <button className="clear-btn" onClick={() => setIncludeNumbers([])}>
-                      초기화
-                    </button>
-                  )}
-                </div>
-                <div 
-                  className="selector-box"
-                  onClick={() => setActiveModal('include')}
-                >
-                  {includeNumbers.length ? (
-                    includeNumbers.map(n => (
-                      <span key={n} className="number-tag include">{n}</span>
-                    ))
-                  ) : (
-                    <span className="selector-placeholder">클릭하여 번호 선택...</span>
-                  )}
-                </div>
-              </div>
+              <NumberComboBox
+                label="필수 포함 번호"
+                selectedNumbers={includeNumbers}
+                disabledNumbers={excludeNumbers}
+                onToggle={toggleInclude}
+                onClear={() => setIncludeNumbers([])}
+                tagClass="include"
+                isOpen={openCombo === 'include'}
+                onToggleOpen={() => handleComboToggle('include')}
+              />
 
-              {/* 제외 번호 */}
-              <div className="input-group" style={{ marginTop: 18 }}>
-                <div className="input-label">
-                  <span className="input-label-text">제외 대상 번호</span>
-                  {excludeNumbers.length > 0 && (
-                    <button className="clear-btn" onClick={() => setExcludeNumbers([])}>
-                      초기화
-                    </button>
-                  )}
-                </div>
-                <div 
-                  className="selector-box"
-                  onClick={() => setActiveModal('exclude')}
-                >
-                  {excludeNumbers.length ? (
-                    excludeNumbers.map(n => (
-                      <span key={n} className="number-tag exclude">{n}</span>
-                    ))
-                  ) : (
-                    <span className="selector-placeholder">클릭하여 번호 선택...</span>
-                  )}
-                </div>
+              <div style={{ marginTop: 18 }}>
+                <NumberComboBox
+                  label="제외 대상 번호"
+                  selectedNumbers={excludeNumbers}
+                  disabledNumbers={includeNumbers}
+                  onToggle={toggleExclude}
+                  onClear={() => setExcludeNumbers([])}
+                  tagClass="exclude"
+                  isOpen={openCombo === 'exclude'}
+                  onToggleOpen={() => handleComboToggle('exclude')}
+                />
               </div>
             </div>
           </div>
@@ -504,24 +537,9 @@ export default function Home() {
                   {savedCombinations.map((combo, idx) => (
                     <div key={idx} className="saved-item">
                       <div className="saved-balls">
-                        {combo.map(num => {
-                          const colors = getBallColor(num);
-                          return (
-                            <span 
-                              key={num} 
-                              className="ball"
-                              style={{ 
-                                backgroundColor: colors.bg, 
-                                color: colors.text,
-                                width: 30,
-                                height: 30,
-                                fontSize: '0.75rem'
-                              }}
-                            >
-                              {num}
-                            </span>
-                          );
-                        })}
+                        {combo.map(num => (
+                          <LottoBall key={num} number={num} small />
+                        ))}
                       </div>
                       <button 
                         className="remove-btn"
@@ -587,21 +605,9 @@ export default function Home() {
                         <div key={idx} className="result-item">
                           <div className="result-rank">{idx + 1}</div>
                           <div className="result-balls">
-                            {combo.map(num => {
-                              const colors = getBallColor(num);
-                              return (
-                                <span 
-                                  key={num} 
-                                  className="ball"
-                                  style={{ 
-                                    backgroundColor: colors.bg, 
-                                    color: colors.text 
-                                  }}
-                                >
-                                  {num}
-                                </span>
-                              );
-                            })}
+                            {combo.map(num => (
+                              <LottoBall key={num} number={num} />
+                            ))}
                           </div>
                           <div className="result-meta">
                             <span className="meta-badge highlight">AC {ac}</span>
@@ -715,25 +721,6 @@ export default function Home() {
           )}
         </main>
       </div>
-
-      {/* 번호 선택 모달 */}
-      <NumberModal
-        isOpen={activeModal === 'include'}
-        onClose={() => setActiveModal(null)}
-        title="필수 포함 번호 선택"
-        selectedNumbers={includeNumbers}
-        disabledNumbers={excludeNumbers}
-        onToggle={toggleInclude}
-      />
-      
-      <NumberModal
-        isOpen={activeModal === 'exclude'}
-        onClose={() => setActiveModal(null)}
-        title="제외 대상 번호 선택"
-        selectedNumbers={excludeNumbers}
-        disabledNumbers={includeNumbers}
-        onToggle={toggleExclude}
-      />
 
       {/* 토스트 */}
       <Toast {...toast} />
