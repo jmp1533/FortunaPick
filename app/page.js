@@ -6,16 +6,28 @@ export default function Home() {
     const [exclude, setExclude] = useState([]);
     const [minAc, setMinAc] = useState(5);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [activeSelector, setActiveSelector] = useState(null); // 'fixed' | 'exclude' | null
+    const [activeSelector, setActiveSelector] = useState(null);
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    // 필터 상세 설명 매핑
+    const filterLabels = {
+        f1: "9 이하의 수가 3개 이상인 조합 제외",
+        f2: "3개 이상의 연속 번호 포함 조합 제외",
+        f3: "동일한 끝수가 4개 이상인 조합 제외",
+        f4: "가로 한 줄(7칸 기준)에 4개 이상 집중 제외",
+        f5: "세로 한 줄(7칸 기준)에 4개 이상 집중 제외",
+        f6: "가장 낮은 수가 21 이상인 조합 제외",
+        f7: "40 이상의 수가 3개 이상인 조합 제외",
+        f8: "설정한 AC값 이하 조합 제외"
+    };
+
     const [filters, setFilters] = useState({
         f1: true, f2: true, f3: true, f4: true, f5: true, f6: true, f7: true, f8: true
     });
 
     const selectorRef = useRef(null);
 
-    // 외부 클릭 시 콤보박스 닫기
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (selectorRef.current && !selectorRef.current.contains(e.target)) {
@@ -56,70 +68,73 @@ export default function Home() {
         <div className="container">
             <header className="brand-header">
                 <h1>FortunaPick</h1>
-                <p>Advanced Mathematical Combination Engine</p>
+                <p>프리미엄 알고리즘 조합 엔진</p>
             </header>
 
             <div className="main-layout" ref={selectorRef}>
-                {/* 설정 영역 */}
                 <div className="config-section">
                     <div className="input-group">
-                        <label>Required Elements</label>
+                        <label>필수 포함 번호</label>
                         <div className={`combo-box ${activeSelector === 'fixed' ? 'open' : ''}`} onClick={() => setActiveSelector('fixed')}>
-                            {fixed.length ? fixed.map(n => <span key={n} className="tag">{n}</span>) : "Select numbers..."}
+                            {fixed.length ? fixed.map(n => <span key={n} className="tag">{n}</span>) : "번호를 선택하세요..."}
                         </div>
                         {activeSelector === 'fixed' && <div className="dropdown">{renderGrid(fixed, setFixed, exclude)}</div>}
                     </div>
 
                     <div className="input-group">
-                        <label>Excluded Elements</label>
+                        <label>제외 대상 번호</label>
                         <div className={`combo-box ${activeSelector === 'exclude' ? 'open' : ''}`} onClick={() => setActiveSelector('exclude')}>
-                            {exclude.length ? exclude.map(n => <span key={n} className="tag secondary">{n}</span>) : "Select numbers..."}
+                            {exclude.length ? exclude.map(n => <span key={n} className="tag secondary">{n}</span>) : "번호를 선택하세요..."}
                         </div>
                         {activeSelector === 'exclude' && <div className="dropdown">{renderGrid(exclude, setExclude, fixed)}</div>}
                     </div>
 
-                    {/* 아코디언 필터 영역 */}
                     <div className="accordion-section">
                         <button className="accordion-trigger" onClick={() => setIsFilterOpen(!isFilterOpen)}>
-                            Filtering Constraints {isFilterOpen ? '−' : '+'}
+                            <span>정밀 필터링 조건 설정</span>
+                            <span>{isFilterOpen ? '−' : '+'}</span>
                         </button>
                         <div className={`accordion-content ${isFilterOpen ? 'visible' : ''}`}>
                             <div className="filter-list">
-                                {Object.keys(filters).map((key, idx) => (
+                                {Object.keys(filters).map((key) => (
                                     <label key={key} className="check-label">
                                         <input type="checkbox" checked={filters[key]} onChange={() => setFilters({...filters, [key]: !filters[key]})} />
-                                        Condition {idx + 1}
+                                        {filterLabels[key]}
                                     </label>
                                 ))}
-                                <div className="ac-input">
-                                    <span>Minimum AC Value</span>
-                                    <input type="number" value={minAc} onChange={e => setMinAc(e.target.value)} />
-                                </div>
+                                {filters.f8 && (
+                                    <div className="ac-input">
+                                        <span>최소 AC값 설정 (미입력 시 5)</span>
+                                        <input type="number" value={minAc} onChange={e => setMinAc(e.target.value)} />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
 
                     <button className="generate-btn" onClick={handleFetch} disabled={loading}>
-                        {loading ? "Analyzing..." : "Generate Selection"}
+                        {loading ? "조합 분석 중..." : "최적 조합 추출"}
                     </button>
                 </div>
 
-                {/* 결과 영역 */}
                 <div className="display-section">
                     {result ? (
                         <div className="result-card">
-                            <h3>Selection Overview</h3>
-                            <p>Analyzed <strong>{result.total.toLocaleString()}</strong> viable combinations.</p>
+                            <h3>분석 결과 요약</h3>
+                            <p>총 <strong>{result.total.toLocaleString()}</strong>개의 유효 조합이 검색되었습니다.</p>
                             <div className="recommendations">
                                 {result.list.map((row, i) => (
                                     <div key={i} className="row-item">
-                                        {row.map(num => <span key={num} className="ball">{num}</span>)}
+                                        <span className="row-idx">{i+1}</span>
+                                        <div className="balls">
+                                            {row.map(num => <span key={num} className="ball">{num}</span>)}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <div className="empty-view">Waiting for generation...</div>
+                        <div className="empty-view">분석 조건을 설정하고 추출 버튼을 눌러주세요.</div>
                     )}
                 </div>
             </div>

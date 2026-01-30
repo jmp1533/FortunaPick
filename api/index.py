@@ -14,9 +14,9 @@ def calculate_ac(numbers):
 
 def check_filters(combo, rules):
     f = rules.get('filters', {})
-    # 활성화된 필터만 작동
+    # 활성화된 필터만 작동 (f1 ~ f8)
     if f.get('f1', True) and sum(1 for n in combo if n <= 9) >= 3: return False
-    if f.get('f2', True):
+    if f.get('f2', True): # 연속 번호 3개 이상
         sorted_c = sorted(combo)
         if any(sorted_c[i+2] == sorted_c[i]+2 for i in range(4)): return False
     if f.get('f3', True) and any(c >= 4 for c in Counter([n%10 for n in combo]).values()): return False
@@ -39,11 +39,12 @@ class handler(BaseHTTPRequestHandler):
         valid = []
         rules = {'min_ac': int(data.get('min_ac', 5)), 'filters': data.get('filters', {})}
 
+        # 조합 생성 및 필터링
         for p in itertools.combinations(pool, 6 - len(fixed)):
             combo = tuple(sorted(list(p) + list(fixed)))
             if check_filters(combo, rules): valid.append(combo)
 
-        # 8:2 전략 추출
+        # 결과 추출 (8:2 전략)
         target = [c for c in valid if sum(1 for n in c if n%2!=0) in [2,3,4] and 7<=calculate_ac(c)<=10]
         others = [c for c in valid if c not in target]
 
