@@ -1,0 +1,15 @@
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding: 20px; }
+.container { max-width: 600px; margin: 0 auto; }
+.title { text-align: center; color: #1a1a1a; margin-bottom: 30px; }
+.card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.input-group { margin-bottom: 15px; }
+.input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
+.input-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+.btn { width: 100%; padding: 15px; background: #0070f3; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+.btn:hover { background: #0051a2; }
+.btn:disabled { background: #ccc; cursor: not-allowed; }
+.result-area { margin-top: 30px; }
+.summary { text-align: center; font-size: 18px; margin-bottom: 20px; }
+.lotto-row { background: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.row-num { color: #999; font-size: 12px; margin-right: 5px; width: 20px; }
+.ball { width: 35px; height: 35px; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
