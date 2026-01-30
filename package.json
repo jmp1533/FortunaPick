@@ -1,6 +1,7 @@
 {
-  "name": "lotto-generator",
-  "version": "0.1.0",
+  "name": "fortunapick",
+  "version": "2.0.0",
+  "description": "Premium Lotto Combination Engine",
   "private": true,
   "scripts": {
     "dev": "next dev",
