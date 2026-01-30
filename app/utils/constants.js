@@ -1,10 +1,10 @@
-// 로또 번호 색상 (한국 로또 기준)
+// 로또 번호 색상 - 실제 로또 공 색상
 export const getBallColor = (num) => {
-  if (num <= 10) return { bg: 'var(--ball-yellow)', text: '#000' };
-  if (num <= 20) return { bg: 'var(--ball-blue)', text: '#fff' };
-  if (num <= 30) return { bg: 'var(--ball-red)', text: '#fff' };
-  if (num <= 40) return { bg: 'var(--ball-gray)', text: '#fff' };
-  return { bg: 'var(--ball-green)', text: '#fff' };
+  if (num <= 10) return { bg: '#FBC400', text: '#000' };  // 노랑
+  if (num <= 20) return { bg: '#69C8F2', text: '#fff' };  // 파랑
+  if (num <= 30) return { bg: '#FF7272', text: '#fff' };  // 빨강
+  if (num <= 40) return { bg: '#AAAAAA', text: '#fff' };  // 회색
+  return { bg: '#B0D840', text: '#000' };                  // 초록
 };
 
 // 필터 정의
@@ -12,50 +12,42 @@ export const FILTER_DEFINITIONS = {
   f1: {
     id: 'f1',
     name: '저번대 제한',
-    description: '1~9 범위 숫자가 3개 이상인 조합 제외',
-    icon: '🔢'
+    description: '1~9 범위 숫자가 3개 이상인 조합 제외'
   },
   f2: {
     id: 'f2',
     name: '연번 제한',
-    description: '3개 이상 연속된 번호 포함 조합 제외',
-    icon: '📊'
+    description: '3개 이상 연속된 번호 포함 조합 제외'
   },
   f3: {
     id: 'f3',
     name: '끝수 제한',
-    description: '동일 끝자리 숫자 4개 이상 조합 제외',
-    icon: '🔄'
+    description: '동일 끝자리 숫자 4개 이상 조합 제외'
   },
   f4: {
     id: 'f4',
     name: '가로 집중 제한',
-    description: '7열 배열 기준 가로 한 줄에 4개 이상 집중 제외',
-    icon: '➡️'
+    description: '7열 배열 기준 가로 한 줄에 4개 이상 집중 제외'
   },
   f5: {
     id: 'f5',
     name: '세로 집중 제한',
-    description: '7열 배열 기준 세로 한 줄에 4개 이상 집중 제외',
-    icon: '⬇️'
+    description: '7열 배열 기준 세로 한 줄에 4개 이상 집중 제외'
   },
   f6: {
     id: 'f6',
     name: '최소값 제한',
-    description: '6개 중 최솟값이 21 이상인 조합 제외',
-    icon: '⬆️'
+    description: '6개 중 최솟값이 21 이상인 조합 제외'
   },
   f7: {
     id: 'f7',
     name: '고번대 제한',
-    description: '40~45 범위 숫자가 3개 이상인 조합 제외',
-    icon: '📈'
+    description: '40~45 범위 숫자가 3개 이상인 조합 제외'
   },
   f8: {
     id: 'f8',
     name: 'AC값 제한',
-    description: '설정한 AC값 이하인 조합 제외',
-    icon: '🎯'
+    description: '설정한 AC값 이하인 조합 제외'
   }
 };
 

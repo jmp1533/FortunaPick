@@ -1,27 +1,78 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   getBallColor, 
   FILTER_DEFINITIONS, 
   calculateAC, 
   getOddEvenRatio, 
-  getHighLowRatio,
   getDecadeDistribution,
-  getSum,
-  getConsecutiveCount
+  getSum
 } from './utils/constants';
 
-// 체크 아이콘 SVG
-const CheckIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20,6 9,17 4,12" />
-  </svg>
-);
+// SVG 아이콘 컴포넌트들
+const Icons = {
+  Logo: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 6v6l4 2"/>
+    </svg>
+  ),
+  Check: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20,6 9,17 4,12" />
+    </svg>
+  ),
+  Settings: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  ),
+  Sparkle: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
+      <path d="M5 19l1 3 1-3 3-1-3-1-1-3-1 3-3 1 3 1z"/>
+    </svg>
+  ),
+  Star: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+  ),
+  StarFilled: () => (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+  ),
+  Copy: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  ),
+  List: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+  ),
+  Chart: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+  ),
+  Grid: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+    </svg>
+  ),
+  X: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  )
+};
 
 // 토스트 컴포넌트
-const Toast = ({ message, visible, icon = '✓' }) => (
+const Toast = ({ message, visible }) => (
   <div className={`toast ${visible ? 'visible' : ''}`}>
-    <span className="toast-icon">{icon}</span>
     <span className="toast-message">{message}</span>
   </div>
 );
@@ -37,19 +88,19 @@ const StatCard = ({ value, label }) => (
 // 도넛 차트 컴포넌트
 const DonutChart = ({ value, total, label, primaryLabel, secondaryLabel }) => {
   const percentage = (value / total) * 100;
-  const circumference = 2 * Math.PI * 45;
+  const circumference = 2 * Math.PI * 40;
   const offset = circumference - (percentage / 100) * circumference;
   
   return (
     <div className="donut-container">
       <div className="donut-chart">
-        <svg width="110" height="110" viewBox="0 0 110 110">
-          <circle className="donut-bg" cx="55" cy="55" r="45" />
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle className="donut-bg" cx="50" cy="50" r="40" />
           <circle 
             className="donut-fill" 
-            cx="55" 
-            cy="55" 
-            r="45"
+            cx="50" 
+            cy="50" 
+            r="40"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
           />
@@ -92,81 +143,50 @@ const BarChart = ({ data, maxValue }) => (
   </div>
 );
 
-// 번호 선택 드롭다운 컴포넌트
-const NumberSelector = ({ 
-  label, 
-  icon,
+// 번호 선택 모달 컴포넌트
+const NumberModal = ({ 
+  isOpen, 
+  onClose, 
+  title, 
   selectedNumbers, 
   disabledNumbers, 
-  onToggle, 
-  onClear,
-  tagClass,
-  isActive,
-  onActivate 
+  onToggle 
 }) => {
-  const wrapperRef = useRef(null);
-  const [dropdownPosition, setDropdownPosition] = useState('bottom');
-
-  // 드롭다운 위치 계산
-  useEffect(() => {
-    if (isActive && wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      const dropdownHeight = 280; // 예상 드롭다운 높이
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      
-      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-        setDropdownPosition('top');
-      } else {
-        setDropdownPosition('bottom');
-      }
-    }
-  }, [isActive]);
+  if (!isOpen) return null;
 
   return (
-    <div className="input-group">
-      <div className="input-label">
-        <span className="input-label-text">{icon} {label}</span>
-        {selectedNumbers.length > 0 && (
-          <button className="clear-btn" onClick={onClear}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="number-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{title}</span>
+          <button className="modal-close" onClick={onClose}>
+            <Icons.X />
+          </button>
+        </div>
+        <div className="modal-content">
+          <div className="number-grid">
+            {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
+              <button
+                key={n}
+                className={`grid-number ${selectedNumbers.includes(n) ? 'selected' : ''} ${disabledNumbers.includes(n) ? 'disabled' : ''}`}
+                onClick={() => onToggle(n)}
+                disabled={disabledNumbers.includes(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="modal-btn secondary" onClick={() => {
+            selectedNumbers.forEach(n => onToggle(n));
+          }}>
             초기화
           </button>
-        )}
-      </div>
-      <div className="input-wrapper" ref={wrapperRef}>
-        <div 
-          className={`selector-box ${isActive ? 'active' : ''}`}
-          onClick={onActivate}
-        >
-          {selectedNumbers.length ? (
-            selectedNumbers.map(n => (
-              <span key={n} className={`number-tag ${tagClass}`}>{n}</span>
-            ))
-          ) : (
-            <span className="selector-placeholder">클릭하여 번호 선택...</span>
-          )}
+          <button className="modal-btn primary" onClick={onClose}>
+            확인
+          </button>
         </div>
-        
-        {isActive && (
-          <div className={`dropdown-grid position-${dropdownPosition}`}>
-            <div className="number-grid">
-              {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
-                <button
-                  key={n}
-                  className={`grid-number ${selectedNumbers.includes(n) ? 'selected' : ''} ${disabledNumbers.includes(n) ? 'disabled' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggle(n);
-                  }}
-                  disabled={disabledNumbers.includes(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -178,19 +198,17 @@ export default function Home() {
   const [excludeNumbers, setExcludeNumbers] = useState([]);
   const [minAc, setMinAc] = useState(5);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [activeSelector, setActiveSelector] = useState(null);
+  const [activeModal, setActiveModal] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [savedCombinations, setSavedCombinations] = useState([]);
-  const [toast, setToast] = useState({ visible: false, message: '', icon: '✓' });
+  const [toast, setToast] = useState({ visible: false, message: '' });
   const [activeTab, setActiveTab] = useState('results');
   
   const [filters, setFilters] = useState({
     f1: true, f2: true, f3: true, f4: true, 
     f5: true, f6: true, f7: true, f8: true
   });
-
-  const containerRef = useRef(null);
 
   // 로컬 스토리지에서 저장된 조합 불러오기
   useEffect(() => {
@@ -209,20 +227,9 @@ export default function Home() {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
 
-  // 외부 클릭 감지
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setActiveSelector(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   // 토스트 표시 함수
-  const showToast = useCallback((message, icon = '✓') => {
-    setToast({ visible: true, message, icon });
+  const showToast = useCallback((message) => {
+    setToast({ visible: true, message });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
   }, []);
 
@@ -243,9 +250,9 @@ export default function Home() {
       const data = await res.json();
       setResult(data);
       setActiveTab('results');
-      showToast(`${data.total.toLocaleString()}개의 유효 조합 발견`, '🎯');
+      showToast(`${data.total.toLocaleString()}개의 유효 조합 발견`);
     } catch (error) {
-      showToast('조합 생성 중 오류가 발생했습니다', '❌');
+      showToast('조합 생성 중 오류가 발생했습니다');
     } finally {
       setLoading(false);
     }
@@ -258,17 +265,17 @@ export default function Home() {
     
     if (exists) {
       setSavedCombinations(prev => prev.filter(s => s.join('-') !== key));
-      showToast('조합이 삭제되었습니다', '🗑️');
+      showToast('조합이 삭제되었습니다');
     } else {
       setSavedCombinations(prev => [...prev, combo]);
-      showToast('조합이 저장되었습니다', '⭐');
+      showToast('조합이 저장되었습니다');
     }
   };
 
   // 조합 복사
   const handleCopy = (combo) => {
     navigator.clipboard.writeText(combo.join(', '));
-    showToast('클립보드에 복사되었습니다', '📋');
+    showToast('클립보드에 복사되었습니다');
   };
 
   // 번호 선택 토글
@@ -341,43 +348,67 @@ export default function Home() {
       {/* 헤더 */}
       <header className="header">
         <div className="logo">
-          <div className="logo-icon">🎯</div>
+          <div className="logo-icon">
+            <Icons.Logo />
+          </div>
           <h1 className="brand-name">Fortuna<span>Pick</span></h1>
         </div>
         <p className="tagline">스마트 번호 조합 추천 서비스</p>
       </header>
 
       {/* 메인 그리드 */}
-      <div className="main-grid" ref={containerRef}>
+      <div className="main-grid">
         {/* 설정 패널 */}
         <aside className="settings-panel">
           {/* 번호 선택 카드 */}
           <div className="card">
             <div className="card-content">
-              <NumberSelector
-                label="필수 포함 번호"
-                icon="📌"
-                selectedNumbers={includeNumbers}
-                disabledNumbers={excludeNumbers}
-                onToggle={toggleInclude}
-                onClear={() => setIncludeNumbers([])}
-                tagClass="include"
-                isActive={activeSelector === 'include'}
-                onActivate={() => setActiveSelector(activeSelector === 'include' ? null : 'include')}
-              />
+              {/* 필수 포함 번호 */}
+              <div className="input-group">
+                <div className="input-label">
+                  <span className="input-label-text">필수 포함 번호</span>
+                  {includeNumbers.length > 0 && (
+                    <button className="clear-btn" onClick={() => setIncludeNumbers([])}>
+                      초기화
+                    </button>
+                  )}
+                </div>
+                <div 
+                  className="selector-box"
+                  onClick={() => setActiveModal('include')}
+                >
+                  {includeNumbers.length ? (
+                    includeNumbers.map(n => (
+                      <span key={n} className="number-tag include">{n}</span>
+                    ))
+                  ) : (
+                    <span className="selector-placeholder">클릭하여 번호 선택...</span>
+                  )}
+                </div>
+              </div>
 
-              <div style={{ marginTop: 20 }}>
-                <NumberSelector
-                  label="제외 대상 번호"
-                  icon="🚫"
-                  selectedNumbers={excludeNumbers}
-                  disabledNumbers={includeNumbers}
-                  onToggle={toggleExclude}
-                  onClear={() => setExcludeNumbers([])}
-                  tagClass="exclude"
-                  isActive={activeSelector === 'exclude'}
-                  onActivate={() => setActiveSelector(activeSelector === 'exclude' ? null : 'exclude')}
-                />
+              {/* 제외 번호 */}
+              <div className="input-group" style={{ marginTop: 18 }}>
+                <div className="input-label">
+                  <span className="input-label-text">제외 대상 번호</span>
+                  {excludeNumbers.length > 0 && (
+                    <button className="clear-btn" onClick={() => setExcludeNumbers([])}>
+                      초기화
+                    </button>
+                  )}
+                </div>
+                <div 
+                  className="selector-box"
+                  onClick={() => setActiveModal('exclude')}
+                >
+                  {excludeNumbers.length ? (
+                    excludeNumbers.map(n => (
+                      <span key={n} className="number-tag exclude">{n}</span>
+                    ))
+                  ) : (
+                    <span className="selector-placeholder">클릭하여 번호 선택...</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -386,7 +417,9 @@ export default function Home() {
           <div className="filter-section">
             <div className="filter-header" onClick={() => setIsFilterOpen(!isFilterOpen)}>
               <div className="filter-header-left">
-                <div className="filter-icon">⚙️</div>
+                <div className="filter-icon">
+                  <Icons.Settings />
+                </div>
                 <div className="filter-header-text">
                   <h4>필터링 조건 설정</h4>
                   <span>{activeFilterCount}개 필터 활성화</span>
@@ -406,13 +439,10 @@ export default function Home() {
                     onClick={() => toggleFilter(key)}
                   >
                     <div className="filter-checkbox">
-                      <CheckIcon />
+                      <Icons.Check />
                     </div>
                     <div className="filter-info">
-                      <div className="filter-name">
-                        <span>{filter.icon}</span>
-                        {filter.name}
-                      </div>
+                      <div className="filter-name">{filter.name}</div>
                       <div className="filter-desc">{filter.description}</div>
                     </div>
                   </div>
@@ -446,12 +476,12 @@ export default function Home() {
           >
             {loading ? (
               <>
-                <span className="loading-spinner" style={{ width: 22, height: 22, borderWidth: 2 }}></span>
+                <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
                 <span>분석 중...</span>
               </>
             ) : (
               <>
-                <span className="generate-btn-icon">✨</span>
+                <Icons.Sparkle />
                 <span>조합 추출하기</span>
               </>
             )}
@@ -462,7 +492,9 @@ export default function Home() {
             <div className="card">
               <div className="card-header">
                 <div className="card-title">
-                  <div className="card-title-icon">⭐</div>
+                  <div className="card-title-icon">
+                    <Icons.Star />
+                  </div>
                   저장된 조합
                 </div>
                 <span className="saved-count">{savedCombinations.length}</span>
@@ -481,9 +513,9 @@ export default function Home() {
                               style={{ 
                                 backgroundColor: colors.bg, 
                                 color: colors.text,
-                                width: 32,
-                                height: 32,
-                                fontSize: '0.8rem'
+                                width: 30,
+                                height: 30,
+                                fontSize: '0.75rem'
                               }}
                             >
                               {num}
@@ -524,13 +556,13 @@ export default function Home() {
                   className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
                   onClick={() => setActiveTab('results')}
                 >
-                  🎯 추천 조합
+                  추천 조합
                 </button>
                 <button 
                   className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
                   onClick={() => setActiveTab('analysis')}
                 >
-                  📊 통계 분석
+                  통계 분석
                 </button>
               </div>
 
@@ -539,7 +571,9 @@ export default function Home() {
                 <div className="card">
                   <div className="card-header">
                     <div className="card-title">
-                      <div className="card-title-icon">🎰</div>
+                      <div className="card-title-icon">
+                        <Icons.List />
+                      </div>
                       추천 번호 조합
                     </div>
                   </div>
@@ -579,14 +613,14 @@ export default function Home() {
                               onClick={() => handleSave(combo)}
                               title={saved ? '저장 취소' : '저장'}
                             >
-                              {saved ? '⭐' : '☆'}
+                              {saved ? <Icons.StarFilled /> : <Icons.Star />}
                             </button>
                             <button 
                               className="action-btn"
                               onClick={() => handleCopy(combo)}
                               title="복사"
                             >
-                              📋
+                              <Icons.Copy />
                             </button>
                           </div>
                         </div>
@@ -601,10 +635,7 @@ export default function Home() {
                 <div className="analysis-grid">
                   {/* 홀짝 분포 */}
                   <div className="chart-card">
-                    <div className="chart-title">
-                      <span>🔢</span>
-                      홀짝 분포 (평균)
-                    </div>
+                    <div className="chart-title">홀짝 분포 (평균)</div>
                     <DonutChart 
                       value={getOverallOddEven().odd}
                       total={6}
@@ -616,10 +647,7 @@ export default function Home() {
 
                   {/* 번호대 분포 */}
                   <div className="chart-card">
-                    <div className="chart-title">
-                      <span>📊</span>
-                      번호대 분포
-                    </div>
+                    <div className="chart-title">번호대 분포</div>
                     <BarChart 
                       data={getOverallDecadeDistribution()}
                       maxValue={Math.max(...Object.values(getOverallDecadeDistribution()), 1)}
@@ -628,10 +656,7 @@ export default function Home() {
 
                   {/* AC 분포 */}
                   <div className="chart-card">
-                    <div className="chart-title">
-                      <span>🎯</span>
-                      AC 값 분포
-                    </div>
+                    <div className="chart-title">AC 값 분포</div>
                     <BarChart 
                       data={(() => {
                         const acDist = {};
@@ -648,10 +673,7 @@ export default function Home() {
 
                   {/* 합계 분포 */}
                   <div className="chart-card">
-                    <div className="chart-title">
-                      <span>➕</span>
-                      합계 범위
-                    </div>
+                    <div className="chart-title">합계 범위</div>
                     <BarChart 
                       data={(() => {
                         const sumRanges = {
@@ -680,7 +702,9 @@ export default function Home() {
           ) : (
             <div className="card">
               <div className="empty-state">
-                <div className="empty-icon">🎲</div>
+                <div className="empty-icon">
+                  <Icons.Grid />
+                </div>
                 <div className="empty-title">번호 조합을 생성해보세요</div>
                 <div className="empty-desc">
                   필수 포함 번호를 선택하고 필터링 조건을 설정한 후
@@ -691,6 +715,25 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* 번호 선택 모달 */}
+      <NumberModal
+        isOpen={activeModal === 'include'}
+        onClose={() => setActiveModal(null)}
+        title="필수 포함 번호 선택"
+        selectedNumbers={includeNumbers}
+        disabledNumbers={excludeNumbers}
+        onToggle={toggleInclude}
+      />
+      
+      <NumberModal
+        isOpen={activeModal === 'exclude'}
+        onClose={() => setActiveModal(null)}
+        title="제외 대상 번호 선택"
+        selectedNumbers={excludeNumbers}
+        disabledNumbers={includeNumbers}
+        onToggle={toggleExclude}
+      />
 
       {/* 토스트 */}
       <Toast {...toast} />
