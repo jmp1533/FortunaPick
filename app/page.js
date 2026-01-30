@@ -1,232 +1,128 @@
 "use client";
-import { useState } from 'react';
-
-// --- 컴포넌트: 숫자 선택기 (드롭다운 스타일) ---
-const NumberSelector = ({ label, selected, onToggle, excludeList = [] }) => {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const toggleNumber = (num) => {
-        onToggle(num);
-    };
-
-    return (
-        <div className="selector-container">
-            <label className="input-label">{label}</label>
-            <div className="selector-box" onClick={() => setIsOpen(!isOpen)}>
-                {selected.length === 0 ? (
-                    <span className="placeholder">번호를 선택하세요</span>
-                ) : (
-                    <div className="chip-container">
-                        {selected.map(n => <span key={n} className="chip">{n}</span>)}
-                    </div>
-                )}
-                <span className="arrow">{isOpen ? '▲' : '▼'}</span>
-            </div>
-
-            {isOpen && (
-                <div className="number-grid-dropdown">
-                    {Array.from({ length: 45 }, (_, i) => i + 1).map(num => {
-                        const isSelected = selected.includes(num);
-                        const isDisabled = excludeList.includes(num);
-                        return (
-                            <button
-                                key={num}
-                                onClick={(e) => { e.stopPropagation(); toggleNumber(num); }}
-                                disabled={isDisabled}
-                                className={`grid-btn ${isSelected ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
-                            >
-                                {num}
-                            </button>
-                        )
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
-    // 상태 관리
-    const [fixedNums, setFixedNums] = useState([]);
-    const [excludeNums, setExcludeNums] = useState([]);
+    const [fixed, setFixed] = useState([]);
+    const [exclude, setExclude] = useState([]);
     const [minAc, setMinAc] = useState(5);
-
-    // 필터 체크박스 상태 (기본값 True)
-    const [filters, setFilters] = useState({
-        under_10_limit: true,
-        consecutive_limit: true,
-        same_end_limit: true,
-        row_limit: true,
-        col_limit: true,
-        min_num_limit: true,
-        high_num_limit: true,
-        ac_limit: true,
-    });
-
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [activeSelector, setActiveSelector] = useState(null); // 'fixed' | 'exclude' | null
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [filters, setFilters] = useState({
+        f1: true, f2: true, f3: true, f4: true, f5: true, f6: true, f7: true, f8: true
+    });
 
-    // 필터 토글 핸들러
-    const toggleFilter = (key) => {
-        setFilters(prev => ({ ...prev, [key]: !prev[key] }));
-    };
+    const selectorRef = useRef(null);
 
-    // 숫자 토글 핸들러
-    const handleFixedToggle = (num) => {
-        if (fixedNums.includes(num)) setFixedNums(fixedNums.filter(n => n !== num));
-        else {
-            if (fixedNums.length >= 5) return alert("필수 숫자는 최대 5개까지만 선택 가능합니다.");
-            setFixedNums([...fixedNums, num].sort((a,b)=>a-b));
-        }
-    };
+    // 외부 클릭 시 콤보박스 닫기
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (selectorRef.current && !selectorRef.current.contains(e.target)) {
+                setActiveSelector(null);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-    const handleExcludeToggle = (num) => {
-        if (excludeNums.includes(num)) setExcludeNums(excludeNums.filter(n => n !== num));
-        else setExcludeNums([...excludeNums, num].sort((a,b)=>a-b));
-    };
-
-    const handleSubmit = async () => {
+    const handleFetch = async () => {
         setLoading(true);
-        setResult(null);
-
         try {
             const res = await fetch('/api/index', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fixed_nums: fixedNums,
-                    exclude_nums: excludeNums,
-                    min_ac: parseInt(minAc),
-                    filters: filters
-                })
+                body: JSON.stringify({ fixed_nums: fixed, exclude_nums: exclude, min_ac: minAc, filters })
             });
-            const data = await res.json();
-            setResult(data);
-        } catch (e) {
-            alert("오류가 발생했습니다.");
-        } finally {
-            setLoading(false);
-        }
+            setResult(await res.json());
+        } finally { setLoading(false); }
     };
 
-    const getBallColor = (num) => {
-        if (num <= 10) return '#fbc400';
-        if (num <= 20) return '#69c8f2';
-        if (num <= 30) return '#ff7272';
-        if (num <= 40) return '#aaaaaa';
-        return '#b0d840';
-    };
+    const renderGrid = (selected, onToggle, disabledList) => (
+        <div className="number-grid">
+            {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
+                <button key={n}
+                        className={`grid-item ${selected.includes(n) ? 'active' : ''} ${disabledList.includes(n) ? 'disabled' : ''}`}
+                        onClick={() => {
+                            if(disabledList.includes(n)) return;
+                            onToggle(selected.includes(n) ? selected.filter(x => x !== n) : [...selected, n].sort((a,b)=>a-b));
+                        }}
+                >{n}</button>
+            ))}
+        </div>
+    );
 
     return (
-        <main className="main-container">
-            <header className="header">
-                <h1 className="brand-logo">FortunaPick</h1>
-                <p className="subtitle">AI 기반 프리미엄 로또 분석기</p>
+        <div className="container">
+            <header className="brand-header">
+                <h1>FortunaPick</h1>
+                <p>Advanced Mathematical Combination Engine</p>
             </header>
 
-            <div className="content-wrapper">
-                {/* --- 왼쪽: 설정 패널 --- */}
-                <div className="control-panel">
-                    <section className="section-card">
-                        <h3 className="section-title">🔢 번호 설정</h3>
-                        <NumberSelector
-                            label="필수 포함 숫자 (최대 5개)"
-                            selected={fixedNums}
-                            onToggle={handleFixedToggle}
-                            excludeList={excludeNums}
-                        />
-                        <div style={{height: '15px'}}></div>
-                        <NumberSelector
-                            label="제외할 숫자"
-                            selected={excludeNums}
-                            onToggle={handleExcludeToggle}
-                            excludeList={fixedNums}
-                        />
-                    </section>
-
-                    <section className="section-card">
-                        <h3 className="section-title">⚡ 필터링 조건</h3>
-                        <div className="filter-grid">
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.under_10_limit} onChange={() => toggleFilter('under_10_limit')} />
-                                <span>9이하 숫자 3개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.consecutive_limit} onChange={() => toggleFilter('consecutive_limit')} />
-                                <span>연속수 3개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.same_end_limit} onChange={() => toggleFilter('same_end_limit')} />
-                                <span>동일 끝수 4개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.row_limit} onChange={() => toggleFilter('row_limit')} />
-                                <span>가로 4개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.col_limit} onChange={() => toggleFilter('col_limit')} />
-                                <span>세로 4개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.min_num_limit} onChange={() => toggleFilter('min_num_limit')} />
-                                <span>최소수 21 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.high_num_limit} onChange={() => toggleFilter('high_num_limit')} />
-                                <span>40대 숫자 3개 이상 제외</span>
-                            </label>
-                            <label className="checkbox-item">
-                                <input type="checkbox" checked={filters.ac_limit} onChange={() => toggleFilter('ac_limit')} />
-                                <span>AC값 필터 적용</span>
-                            </label>
+            <div className="main-layout" ref={selectorRef}>
+                {/* 설정 영역 */}
+                <div className="config-section">
+                    <div className="input-group">
+                        <label>Required Elements</label>
+                        <div className={`combo-box ${activeSelector === 'fixed' ? 'open' : ''}`} onClick={() => setActiveSelector('fixed')}>
+                            {fixed.length ? fixed.map(n => <span key={n} className="tag">{n}</span>) : "Select numbers..."}
                         </div>
-                        {filters.ac_limit && (
-                            <div style={{marginTop: '10px'}}>
-                                <label className="input-label" style={{fontSize: '12px'}}>AC 최소값 (이하 제외)</label>
-                                <input
-                                    type="number"
-                                    value={minAc}
-                                    onChange={(e) => setMinAc(e.target.value)}
-                                    className="simple-input"
-                                />
-                            </div>
-                        )}
-                    </section>
+                        {activeSelector === 'fixed' && <div className="dropdown">{renderGrid(fixed, setFixed, exclude)}</div>}
+                    </div>
 
-                    <button onClick={handleSubmit} disabled={loading} className="action-btn">
-                        {loading ? 'Fortuna 분석 중...' : '조합 추출 시작'}
+                    <div className="input-group">
+                        <label>Excluded Elements</label>
+                        <div className={`combo-box ${activeSelector === 'exclude' ? 'open' : ''}`} onClick={() => setActiveSelector('exclude')}>
+                            {exclude.length ? exclude.map(n => <span key={n} className="tag secondary">{n}</span>) : "Select numbers..."}
+                        </div>
+                        {activeSelector === 'exclude' && <div className="dropdown">{renderGrid(exclude, setExclude, fixed)}</div>}
+                    </div>
+
+                    {/* 아코디언 필터 영역 */}
+                    <div className="accordion-section">
+                        <button className="accordion-trigger" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+                            Filtering Constraints {isFilterOpen ? '−' : '+'}
+                        </button>
+                        <div className={`accordion-content ${isFilterOpen ? 'visible' : ''}`}>
+                            <div className="filter-list">
+                                {Object.keys(filters).map((key, idx) => (
+                                    <label key={key} className="check-label">
+                                        <input type="checkbox" checked={filters[key]} onChange={() => setFilters({...filters, [key]: !filters[key]})} />
+                                        Condition {idx + 1}
+                                    </label>
+                                ))}
+                                <div className="ac-input">
+                                    <span>Minimum AC Value</span>
+                                    <input type="number" value={minAc} onChange={e => setMinAc(e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button className="generate-btn" onClick={handleFetch} disabled={loading}>
+                        {loading ? "Analyzing..." : "Generate Selection"}
                     </button>
                 </div>
 
-                {/* --- 오른쪽: 결과 패널 --- */}
-                <div className="result-panel">
+                {/* 결과 영역 */}
+                <div className="display-section">
                     {result ? (
-                        <div className="result-content">
-                            <h2 className="result-title">✨ 분석 결과</h2>
-                            <p className="result-summary">
-                                Fortuna 알고리즘이 <strong>{result.total_valid_count.toLocaleString()}</strong>개의 조합 중 최적의 10개를 선별했습니다.
-                            </p>
-                            <div className="lotto-list">
-                                {result.recommendations.map((combo, idx) => (
-                                    <div key={idx} className="lotto-row">
-                                        <span className="row-badge">PICK {idx + 1}</span>
-                                        <div className="balls">
-                                            {combo.map(num => (
-                                                <span key={num} className="ball" style={{backgroundColor: getBallColor(num)}}>{num}</span>
-                                            ))}
-                                        </div>
+                        <div className="result-card">
+                            <h3>Selection Overview</h3>
+                            <p>Analyzed <strong>{result.total.toLocaleString()}</strong> viable combinations.</p>
+                            <div className="recommendations">
+                                {result.list.map((row, i) => (
+                                    <div key={i} className="row-item">
+                                        {row.map(num => <span key={num} className="ball">{num}</span>)}
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <div className="empty-state">
-                            <div className="logo-placeholder">FP</div>
-                            <p>조건을 설정하고 추출 버튼을 눌러주세요.</p>
-                        </div>
+                        <div className="empty-view">Waiting for generation...</div>
                     )}
                 </div>
             </div>
-        </main>
+        </div>
     );
 }
