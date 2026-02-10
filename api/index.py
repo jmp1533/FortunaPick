@@ -124,10 +124,10 @@ def check_filters(combo, rules):
         if sum(1 for n in combo if n >= 40) >= 3:
             return False
     
-    # f8: AC값이 설정값 이하인 조합 제외
+    # f8: AC값이 설정값 미만인 조합 제외
     if f.get('f8', True):
         min_ac = rules.get('min_ac', 5)
-        if calculate_ac(combo) <= min_ac:
+        if calculate_ac(combo) < min_ac:
             return False
     
     return True
@@ -256,6 +256,8 @@ class handler(BaseHTTPRequestHandler):
             fixed_nums = set(data.get('fixed_nums', []))
             exclude_nums = set(data.get('exclude_nums', []))
             min_ac = int(data.get('min_ac', 5))
+            # AC 값 범위 제한 (0~10)
+            min_ac = max(0, min(10, min_ac))
             filters = data.get('filters', {})
             
             # 사용 가능한 번호 풀 생성
