@@ -65,6 +65,16 @@ const Icons = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
     </svg>
+  ),
+  Chart: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+  ),
+  Search: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
   )
 };
 
@@ -95,7 +105,7 @@ const StatCard = ({ value, label }) => (
 
 // 도넛 차트 컴포넌트
 const DonutChart = ({ value, total, label, primaryLabel, secondaryLabel }) => {
-  const percentage = (value / total) * 100;
+  const percentage = total > 0 ? (value / total) * 100 : 0;
   const circumference = 2 * Math.PI * 40;
   const offset = circumference - (percentage / 100) * circumference;
   
@@ -231,8 +241,209 @@ const NumberComboBox = ({
   );
 };
 
+// 분석 화면 컴포넌트
+const AnalysisView = ({ historyData, loading, error }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredHistory, setFilteredHistory] = useState([]);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    if (historyData && historyData.history) {
+      setFilteredHistory(historyData.history);
+      
+      // 통계 계산
+      const totalRounds = historyData.history.length;
+      const numberCounts = Array(46).fill(0);
+      let totalOdd = 0;
+      const decadeCounts = { '1-10': 0, '11-20': 0, '21-30': 0, '31-40': 0, '41-45': 0 };
+      
+      historyData.history.forEach(round => {
+        round.numbers.forEach(num => {
+          numberCounts[num]++;
+          if (num % 2 !== 0) totalOdd++;
+          
+          if (num <= 10) decadeCounts['1-10']++;
+          else if (num <= 20) decadeCounts['11-20']++;
+          else if (num <= 30) decadeCounts['21-30']++;
+          else if (num <= 40) decadeCounts['31-40']++;
+          else decadeCounts['41-45']++;
+        });
+      });
+
+      // 가장 많이 나온 번호 Top 5
+      const topNumbers = numberCounts
+        .map((count, num) => ({ num, count }))
+        .filter(item => item.num > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // 미출현 번호 (최근 10회 기준)
+      const recentRounds = historyData.history.slice(0, 10);
+      const recentNumbers = new Set();
+      recentRounds.forEach(round => {
+        round.numbers.forEach(num => recentNumbers.add(num));
+      });
+      const coldNumbers = Array.from({ length: 45 }, (_, i) => i + 1)
+        .filter(num => !recentNumbers.has(num));
+
+      setStats({
+        totalRounds,
+        topNumbers,
+        coldNumbers,
+        oddRatio: Math.round((totalOdd / (totalRounds * 6)) * 100),
+        decadeCounts
+      });
+    }
+  }, [historyData]);
+
+  useEffect(() => {
+    if (historyData && historyData.history) {
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const filtered = historyData.history.filter(item => 
+          item.round.toString().includes(term) || 
+          item.date.includes(term)
+        );
+        setFilteredHistory(filtered);
+      } else {
+        setFilteredHistory(historyData.history);
+      }
+    }
+  }, [searchTerm, historyData]);
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <span className="loading-spinner"></span>
+        <p>당첨 이력을 불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (!historyData) return null;
+
+  return (
+    <div className="analysis-view">
+      {/* 최신 회차 정보 */}
+      <div className="hero-section">
+        <div className="hero-content">
+          <div className="hero-badge">최신 회차</div>
+          <h2 className="hero-title">{historyData.latestRound}회 당첨결과</h2>
+          <p className="hero-date">{historyData.history[0]?.date}</p>
+          <div className="hero-balls">
+            {historyData.history[0]?.numbers.map(num => (
+              <LottoBall key={num} number={num} />
+            ))}
+            <span className="plus-sign">+</span>
+            <LottoBall number={historyData.history[0]?.bonus} />
+          </div>
+        </div>
+      </div>
+
+      {/* 통계 대시보드 */}
+      {stats && (
+        <div className="analysis-grid">
+          <div className="chart-card">
+            <div className="chart-title">자주 나온 번호 (Top 5)</div>
+            <BarChart 
+              data={stats.topNumbers.reduce((acc, curr) => ({ ...acc, [`${curr.num}번`]: curr.count }), {})}
+              maxValue={stats.topNumbers[0]?.count || 1}
+            />
+          </div>
+          
+          <div className="chart-card">
+            <div className="chart-title">홀짝 비율 (전체)</div>
+            <DonutChart 
+              value={stats.oddRatio}
+              total={100}
+              label="%"
+              primaryLabel="홀수"
+              secondaryLabel="짝수"
+            />
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-title">구간별 출현 분포</div>
+            <BarChart 
+              data={stats.decadeCounts}
+              maxValue={Math.max(...Object.values(stats.decadeCounts))}
+            />
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-title">최근 10회 미출현 번호</div>
+            <div className="cold-numbers">
+              {stats.coldNumbers.length > 0 ? (
+                stats.coldNumbers.map(num => (
+                  <span key={num} className="cold-number-tag">{num}</span>
+                ))
+              ) : (
+                <span className="empty-text">미출현 번호 없음</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 회차별 이력 리스트 */}
+      <div className="card history-list-card">
+        <div className="card-header">
+          <div className="card-title">
+            <Icons.List />
+            회차별 당첨 이력
+          </div>
+          <div className="search-box">
+            <Icons.Search />
+            <input 
+              type="text" 
+              placeholder="회차 또는 날짜 검색" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="history-list">
+          <div className="history-header-row">
+            <span className="col-round">회차</span>
+            <span className="col-date">추첨일</span>
+            <span className="col-numbers">당첨번호</span>
+            <span className="col-bonus">보너스</span>
+          </div>
+          <div className="history-items">
+            {filteredHistory.map(item => (
+              <div key={item.round} className="history-item">
+                <span className="col-round">{item.round}회</span>
+                <span className="col-date">{item.date}</span>
+                <div className="col-numbers">
+                  {item.numbers.map(num => (
+                    <LottoBall key={num} number={num} small />
+                  ))}
+                </div>
+                <span className="col-bonus">
+                  <LottoBall number={item.bonus} small />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Home() {
   // 상태 관리
+  const [activeView, setActiveView] = useState('recommend'); // 'recommend' or 'analysis'
+  
+  // 추천 관련 상태
   const [includeNumbers, setIncludeNumbers] = useState([]);
   const [excludeNumbers, setExcludeNumbers] = useState([]);
   const [minAc, setMinAc] = useState(5);
@@ -243,6 +454,11 @@ export default function Home() {
   const [savedCombinations, setSavedCombinations] = useState([]);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [activeTab, setActiveTab] = useState('results');
+  
+  // 분석 관련 상태
+  const [historyData, setHistoryData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
   
   const [filters, setFilters] = useState({
     f1: true, f2: true, f3: true, f4: true, 
@@ -267,6 +483,26 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
+
+  // 당첨 이력 데이터 로드
+  useEffect(() => {
+    if (activeView === 'analysis' && !historyData) {
+      const fetchHistory = async () => {
+        setHistoryLoading(true);
+        try {
+          const res = await fetch('/api/history');
+          if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
+          const data = await res.json();
+          setHistoryData(data);
+        } catch (err) {
+          setHistoryError(err.message);
+        } finally {
+          setHistoryLoading(false);
+        }
+      };
+      fetchHistory();
+    }
+  }, [activeView, historyData]);
 
   // 외부 클릭 감지하여 드롭다운 닫기
   useEffect(() => {
@@ -295,7 +531,7 @@ export default function Home() {
         body: JSON.stringify({ 
           fixed_nums: includeNumbers, 
           exclude_nums: excludeNumbers, 
-          min_ac: minAc, 
+          min_ac: minAc === '' ? 0 : minAc, 
           filters 
         })
       });
@@ -404,322 +640,361 @@ export default function Home() {
     <div className="app-container" ref={mainRef}>
       {/* 헤더 */}
       <header className="header">
-        <div className="logo">
-          <div className="logo-icon">
-            <Icons.Logo />
+        <div className="header-content">
+          <div className="logo">
+            <div className="logo-icon">
+              <Icons.Logo />
+            </div>
+            <h1 className="brand-name">Fortuna<span>Pick</span></h1>
           </div>
-          <h1 className="brand-name">Fortuna<span>Pick</span></h1>
+          
+          {/* 메인 네비게이션 탭 */}
+          <nav className="main-nav">
+            <button 
+              className={`nav-item ${activeView === 'recommend' ? 'active' : ''}`}
+              onClick={() => setActiveView('recommend')}
+            >
+              <Icons.Sparkle />
+              <span>번호 추천</span>
+            </button>
+            <button 
+              className={`nav-item ${activeView === 'analysis' ? 'active' : ''}`}
+              onClick={() => setActiveView('analysis')}
+            >
+              <Icons.Chart />
+              <span>당첨 분석</span>
+            </button>
+          </nav>
         </div>
-        <p className="tagline">스마트 번호 조합 추천 서비스</p>
       </header>
 
-      {/* 메인 그리드 */}
-      <div className="main-grid">
-        {/* 설정 패널 */}
-        <aside className="settings-panel">
-          {/* 번호 선택 카드 */}
-          <div className="card">
-            <div className="card-content">
-              <NumberComboBox
-                label="필수 포함 번호"
-                selectedNumbers={includeNumbers}
-                disabledNumbers={excludeNumbers}
-                onToggle={toggleInclude}
-                onClear={() => setIncludeNumbers([])}
-                tagClass="include"
-                isOpen={openCombo === 'include'}
-                onToggleOpen={() => handleComboToggle('include')}
-              />
+      {/* 메인 컨텐츠 영역 */}
+      <div className="content-area">
+        {activeView === 'recommend' ? (
+          <div className="main-grid">
+            {/* 설정 패널 */}
+            <aside className="settings-panel">
+              {/* 번호 선택 카드 */}
+              <div className="card">
+                <div className="card-content">
+                  <NumberComboBox
+                    label="필수 포함 번호"
+                    selectedNumbers={includeNumbers}
+                    disabledNumbers={excludeNumbers}
+                    onToggle={toggleInclude}
+                    onClear={() => setIncludeNumbers([])}
+                    tagClass="include"
+                    isOpen={openCombo === 'include'}
+                    onToggleOpen={() => handleComboToggle('include')}
+                  />
 
-              <div style={{ marginTop: 18 }}>
-                <NumberComboBox
-                  label="제외 대상 번호"
-                  selectedNumbers={excludeNumbers}
-                  disabledNumbers={includeNumbers}
-                  onToggle={toggleExclude}
-                  onClear={() => setExcludeNumbers([])}
-                  tagClass="exclude"
-                  isOpen={openCombo === 'exclude'}
-                  onToggleOpen={() => handleComboToggle('exclude')}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 필터 설정 */}
-          <div className="filter-section">
-            <div className="filter-header" onClick={() => setIsFilterOpen(!isFilterOpen)}>
-              <div className="filter-header-left">
-                <div className="filter-icon">
-                  <Icons.Settings />
-                </div>
-                <div className="filter-header-text">
-                  <h4>필터링 조건 설정</h4>
-                  <span>{activeFilterCount}개 필터 활성화</span>
+                  <div style={{ marginTop: 18 }}>
+                    <NumberComboBox
+                      label="제외 대상 번호"
+                      selectedNumbers={excludeNumbers}
+                      disabledNumbers={includeNumbers}
+                      onToggle={toggleExclude}
+                      onClear={() => setExcludeNumbers([])}
+                      tagClass="exclude"
+                      isOpen={openCombo === 'exclude'}
+                      onToggleOpen={() => handleComboToggle('exclude')}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className={`filter-toggle ${isFilterOpen ? 'open' : ''}`}>
-                ▼
-              </div>
-            </div>
-            
-            <div className={`filter-content ${isFilterOpen ? 'visible' : ''}`}>
-              <div className="filter-list">
-                {Object.entries(FILTER_DEFINITIONS).map(([key, filter]) => (
-                  <div 
-                    key={key}
-                    className={`filter-item ${filters[key] ? 'active' : ''}`}
-                    onClick={() => toggleFilter(key)}
-                  >
-                    <div className="filter-checkbox">
-                      <Icons.Check />
+
+              {/* 필터 설정 */}
+              <div className="filter-section">
+                <div className="filter-header" onClick={() => setIsFilterOpen(!isFilterOpen)}>
+                  <div className="filter-header-left">
+                    <div className="filter-icon">
+                      <Icons.Settings />
                     </div>
-                    <div className="filter-info">
-                      <div className="filter-name">{filter.name}</div>
-                      <div className="filter-desc">{filter.description}</div>
+                    <div className="filter-header-text">
+                      <h4>필터링 조건 설정</h4>
+                      <span>{activeFilterCount}개 필터 활성화</span>
                     </div>
                   </div>
-                ))}
+                  <div className={`filter-toggle ${isFilterOpen ? 'open' : ''}`}>
+                    ▼
+                  </div>
+                </div>
                 
-                {/* AC 값 입력 */}
-                {filters.f8 && (
-                  <div className="ac-input-section">
-                    <div className="ac-input-row">
-                      <span className="ac-label">최소 AC 값 설정</span>
-                      <input 
-                        type="number" 
-                        className="ac-input"
-                        value={minAc}
-                        min={1}
-                        max={10}
-                        onChange={(e) => setMinAc(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 생성 버튼 */}
-          <button 
-            className="generate-btn" 
-            onClick={handleGenerate}
-            disabled={loading || includeNumbers.length === 0}
-          >
-            {loading ? (
-              <>
-                <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
-                <span>분석 중...</span>
-              </>
-            ) : (
-              <>
-                <Icons.Sparkle />
-                <span>조합 추출하기</span>
-              </>
-            )}
-          </button>
-
-          {/* 저장된 조합 */}
-          {savedCombinations.length > 0 && (
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title">
-                  <div className="card-title-icon">
-                    <Icons.Star />
-                  </div>
-                  저장된 조합
-                </div>
-                <span className="saved-count">{savedCombinations.length}</span>
-              </div>
-              <div className="card-content" style={{ padding: 14 }}>
-                <div className="saved-list">
-                  {savedCombinations.map((combo, idx) => (
-                    <div key={idx} className="saved-item">
-                      <div className="saved-balls">
-                        {combo.map(num => (
-                          <LottoBall key={num} number={num} small />
-                        ))}
-                      </div>
-                      <button 
-                        className="remove-btn"
-                        onClick={() => handleSave(combo)}
-                        title="삭제"
+                <div className={`filter-content ${isFilterOpen ? 'visible' : ''}`}>
+                  <div className="filter-list">
+                    {Object.entries(FILTER_DEFINITIONS).map(([key, filter]) => (
+                      <div 
+                        key={key}
+                        className={`filter-item ${filters[key] ? 'active' : ''}`}
+                        onClick={() => toggleFilter(key)}
                       >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                        <div className="filter-checkbox">
+                          <Icons.Check />
+                        </div>
+                        <div className="filter-info">
+                          <div className="filter-name">{filter.name}</div>
+                          <div className="filter-desc">{filter.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* AC 값 입력 */}
+                    {filters.f8 && (
+                      <div className="ac-input-section">
+                        <div className="ac-input-row">
+                          <span className="ac-label">최소 AC 값 설정</span>
+                          <input 
+                            type="number" 
+                            className="ac-input"
+                            value={minAc}
+                            min={0}
+                            max={10}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '') {
+                                setMinAc('');
+                              } else {
+                                const numVal = parseInt(val);
+                                if (!isNaN(numVal)) {
+                                  setMinAc(Math.max(0, Math.min(10, numVal)));
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </aside>
 
-        {/* 결과 패널 */}
-        <main className="results-panel">
-          {result ? (
-            <>
-              {/* 통계 요약 */}
-              <div className="stats-grid">
-                <StatCard value={result.total.toLocaleString()} label="유효 조합" />
-                <StatCard value={result.list.length} label="추천 조합" />
-                <StatCard value={getAverageAC()} label="평균 AC" />
-                <StatCard value={savedCombinations.length} label="저장됨" />
-              </div>
+              {/* 생성 버튼 */}
+              <button 
+                className="generate-btn" 
+                onClick={handleGenerate}
+                disabled={loading || includeNumbers.length === 0}
+              >
+                {loading ? (
+                  <>
+                    <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
+                    <span>분석 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icons.Sparkle />
+                    <span>조합 추출하기</span>
+                  </>
+                )}
+              </button>
 
-              {/* 탭 네비게이션 */}
-              <div className="tabs">
-                <button 
-                  className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('results')}
-                >
-                  추천 조합
-                </button>
-                <button 
-                  className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('analysis')}
-                >
-                  통계 분석
-                </button>
-              </div>
-
-              {/* 결과 목록 */}
-              {activeTab === 'results' && (
+              {/* 저장된 조합 */}
+              {savedCombinations.length > 0 && (
                 <div className="card">
                   <div className="card-header">
                     <div className="card-title">
                       <div className="card-title-icon">
-                        <Icons.List />
+                        <Icons.Star />
                       </div>
-                      추천 번호 조합
+                      저장된 조합
                     </div>
+                    <span className="saved-count">{savedCombinations.length}</span>
                   </div>
-                  <div className="result-list">
-                    {result.list.map((combo, idx) => {
-                      const ac = calculateAC(combo);
-                      const oddEven = getOddEvenRatio(combo);
-                      const saved = isSaved(combo);
-                      
-                      return (
-                        <div key={idx} className="result-item">
-                          <div className="result-rank">{idx + 1}</div>
-                          <div className="result-balls">
+                  <div className="card-content" style={{ padding: 14 }}>
+                    <div className="saved-list">
+                      {savedCombinations.map((combo, idx) => (
+                        <div key={idx} className="saved-item">
+                          <div className="saved-balls">
                             {combo.map(num => (
-                              <LottoBall key={num} number={num} />
+                              <LottoBall key={num} number={num} small />
                             ))}
                           </div>
-                          <div className="result-meta">
-                            <span className="meta-badge highlight">AC {ac}</span>
-                            <span className="meta-badge">홀 {oddEven.odd}:짝 {oddEven.even}</span>
-                          </div>
-                          <div className="result-actions">
-                            <button 
-                              className={`action-btn ${saved ? 'saved' : ''}`}
-                              onClick={() => handleSave(combo)}
-                              title={saved ? '저장 취소' : '저장'}
-                            >
-                              {saved ? <Icons.StarFilled /> : <Icons.Star />}
-                            </button>
-                            <button 
-                              className="action-btn"
-                              onClick={() => handleCopy(combo)}
-                              title="복사"
-                            >
-                              <Icons.Copy />
-                            </button>
-                          </div>
+                          <button 
+                            className="remove-btn"
+                            onClick={() => handleSave(combo)}
+                            title="삭제"
+                          >
+                            ✕
+                          </button>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
+            </aside>
 
-              {/* 분석 탭 */}
-              {activeTab === 'analysis' && (
-                <div className="analysis-grid">
-                  {/* 홀짝 분포 */}
-                  <div className="chart-card">
-                    <div className="chart-title">홀짝 분포 (평균)</div>
-                    <DonutChart 
-                      value={getOverallOddEven().odd}
-                      total={6}
-                      label="비율"
-                      primaryLabel="홀수"
-                      secondaryLabel="짝수"
-                    />
+            {/* 결과 패널 */}
+            <main className="results-panel">
+              {result ? (
+                <>
+                  {/* 통계 요약 */}
+                  <div className="stats-grid">
+                    <StatCard value={result.total.toLocaleString()} label="유효 조합" />
+                    <StatCard value={result.list.length} label="추천 조합" />
+                    <StatCard value={getAverageAC()} label="평균 AC" />
+                    <StatCard value={savedCombinations.length} label="저장됨" />
                   </div>
 
-                  {/* 번호대 분포 */}
-                  <div className="chart-card">
-                    <div className="chart-title">번호대 분포</div>
-                    <BarChart 
-                      data={getOverallDecadeDistribution()}
-                      maxValue={Math.max(...Object.values(getOverallDecadeDistribution()), 1)}
-                    />
+                  {/* 탭 네비게이션 */}
+                  <div className="tabs">
+                    <button 
+                      className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('results')}
+                    >
+                      추천 조합
+                    </button>
+                    <button 
+                      className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('analysis')}
+                    >
+                      통계 분석
+                    </button>
                   </div>
 
-                  {/* AC 분포 */}
-                  <div className="chart-card">
-                    <div className="chart-title">AC 값 분포</div>
-                    <BarChart 
-                      data={(() => {
-                        const acDist = {};
-                        result.list.forEach(combo => {
+                  {/* 결과 목록 */}
+                  {activeTab === 'results' && (
+                    <div className="card">
+                      <div className="card-header">
+                        <div className="card-title">
+                          <div className="card-title-icon">
+                            <Icons.List />
+                          </div>
+                          추천 번호 조합
+                        </div>
+                      </div>
+                      <div className="result-list">
+                        {result.list.map((combo, idx) => {
                           const ac = calculateAC(combo);
-                          const key = `AC ${ac}`;
-                          acDist[key] = (acDist[key] || 0) + 1;
-                        });
-                        return acDist;
-                      })()}
-                      maxValue={result.list.length}
-                    />
-                  </div>
+                          const oddEven = getOddEvenRatio(combo);
+                          const saved = isSaved(combo);
+                          
+                          return (
+                            <div key={idx} className="result-item">
+                              <div className="result-rank">{idx + 1}</div>
+                              <div className="result-balls">
+                                {combo.map(num => (
+                                  <LottoBall key={num} number={num} />
+                                ))}
+                              </div>
+                              <div className="result-meta">
+                                <span className="meta-badge highlight">AC {ac}</span>
+                                <span className="meta-badge">홀 {oddEven.odd}:짝 {oddEven.even}</span>
+                              </div>
+                              <div className="result-actions">
+                                <button 
+                                  className={`action-btn ${saved ? 'saved' : ''}`}
+                                  onClick={() => handleSave(combo)}
+                                  title={saved ? '저장 취소' : '저장'}
+                                >
+                                  {saved ? <Icons.StarFilled /> : <Icons.Star />}
+                                </button>
+                                <button 
+                                  className="action-btn"
+                                  onClick={() => handleCopy(combo)}
+                                  title="복사"
+                                >
+                                  <Icons.Copy />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-                  {/* 합계 분포 */}
-                  <div className="chart-card">
-                    <div className="chart-title">합계 범위</div>
-                    <BarChart 
-                      data={(() => {
-                        const sumRanges = {
-                          '~100': 0,
-                          '101-130': 0,
-                          '131-160': 0,
-                          '161-190': 0,
-                          '191~': 0
-                        };
-                        result.list.forEach(combo => {
-                          const sum = getSum(combo);
-                          if (sum <= 100) sumRanges['~100']++;
-                          else if (sum <= 130) sumRanges['101-130']++;
-                          else if (sum <= 160) sumRanges['131-160']++;
-                          else if (sum <= 190) sumRanges['161-190']++;
-                          else sumRanges['191~']++;
-                        });
-                        return sumRanges;
-                      })()}
-                      maxValue={result.list.length}
-                    />
+                  {/* 분석 탭 */}
+                  {activeTab === 'analysis' && (
+                    <div className="analysis-grid">
+                      {/* 홀짝 분포 */}
+                      <div className="chart-card">
+                        <div className="chart-title">홀짝 분포 (평균)</div>
+                        <DonutChart 
+                          value={getOverallOddEven().odd}
+                          total={6}
+                          label="비율"
+                          primaryLabel="홀수"
+                          secondaryLabel="짝수"
+                        />
+                      </div>
+
+                      {/* 번호대 분포 */}
+                      <div className="chart-card">
+                        <div className="chart-title">번호대 분포</div>
+                        <BarChart 
+                          data={getOverallDecadeDistribution()}
+                          maxValue={Math.max(...Object.values(getOverallDecadeDistribution()), 1)}
+                        />
+                      </div>
+
+                      {/* AC 분포 */}
+                      <div className="chart-card">
+                        <div className="chart-title">AC 값 분포</div>
+                        <BarChart 
+                          data={(() => {
+                            const acDist = {};
+                            result.list.forEach(combo => {
+                              const ac = calculateAC(combo);
+                              const key = `AC ${ac}`;
+                              acDist[key] = (acDist[key] || 0) + 1;
+                            });
+                            return acDist;
+                          })()}
+                          maxValue={result.list.length}
+                        />
+                      </div>
+
+                      {/* 합계 분포 */}
+                      <div className="chart-card">
+                        <div className="chart-title">합계 범위</div>
+                        <BarChart 
+                          data={(() => {
+                            const sumRanges = {
+                              '~100': 0,
+                              '101-130': 0,
+                              '131-160': 0,
+                              '161-190': 0,
+                              '191~': 0
+                            };
+                            result.list.forEach(combo => {
+                              const sum = getSum(combo);
+                              if (sum <= 100) sumRanges['~100']++;
+                              else if (sum <= 130) sumRanges['101-130']++;
+                              else if (sum <= 160) sumRanges['131-160']++;
+                              else if (sum <= 190) sumRanges['161-190']++;
+                              else sumRanges['191~']++;
+                            });
+                            return sumRanges;
+                          })()}
+                          maxValue={result.list.length}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="card">
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <Icons.Grid />
+                    </div>
+                    <div className="empty-title">번호 조합을 생성해보세요</div>
+                    <div className="empty-desc">
+                      필수 포함 번호를 선택하고 필터링 조건을 설정한 후
+                      '조합 추출하기' 버튼을 클릭하세요.
+                    </div>
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-icon">
-                  <Icons.Grid />
-                </div>
-                <div className="empty-title">번호 조합을 생성해보세요</div>
-                <div className="empty-desc">
-                  필수 포함 번호를 선택하고 필터링 조건을 설정한 후
-                  '조합 추출하기' 버튼을 클릭하세요.
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
+            </main>
+          </div>
+        ) : (
+          <AnalysisView 
+            historyData={historyData} 
+            loading={historyLoading} 
+            error={historyError} 
+          />
+        )}
       </div>
 
       {/* 토스트 */}
