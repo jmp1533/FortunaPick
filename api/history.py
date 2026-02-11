@@ -7,24 +7,41 @@ import datetime
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Construct the absolute path to the Excel file
-            # Assuming the 'lottery' folder is at the project root
-            script_dir = os.path.dirname(__file__)
-            project_root = os.path.abspath(os.path.join(script_dir, '..'))
-            excel_path = os.path.join(project_root, 'lottery', 'winningNumbers.xlsx')
+            # Define potential paths for the Excel file to handle different environments (Local vs Vercel)
+            possible_paths = [
+                os.path.join(os.path.dirname(__file__), '..', 'lottery', 'winningNumbers.xlsx'),
+                os.path.join(os.getcwd(), 'lottery', 'winningNumbers.xlsx'),
+                os.path.join(os.path.dirname(__file__), 'lottery', 'winningNumbers.xlsx'),
+                '/var/task/lottery/winningNumbers.xlsx'
+            ]
+
+            excel_path = None
+            checked_paths = []
+            for path in possible_paths:
+                full_path = os.path.abspath(path)
+                checked_paths.append(full_path)
+                if os.path.exists(full_path):
+                    excel_path = full_path
+                    break
 
             # Check if the file exists
-            if not os.path.exists(excel_path):
+            if not excel_path:
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Excel file not found.'}).encode())
+                # Include checked paths for debugging purposes
+                self.wfile.write(json.dumps({
+                    'error': 'Excel file not found.',
+                    'checked_paths': checked_paths,
+                    'cwd': os.getcwd(),
+                    'script_dir': os.path.dirname(__file__)
+                }).encode())
                 return
 
             # Read the Excel file
             # Assuming columns: '회차', '추첨일', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6', '보너스'
-            df = pd.read_excel(excel_path)
+            df = pd.read_excel(excel_path, engine='openpyxl')
 
             # Process the DataFrame into the desired JSON format
             history_data = []
