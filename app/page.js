@@ -244,72 +244,69 @@ const NumberComboBox = ({
 // 분석 화면 컴포넌트
 const AnalysisView = ({ historyData, loading, error }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchNumbers, setSearchNumbers] = useState([]);
+  const [searchIncludeBonus, setSearchIncludeBonus] = useState(true);
   const [filteredHistory, setFilteredHistory] = useState([]);
-  const [stats, setStats] = useState(null);
+  
+  const [coldPeriod, setColdPeriod] = useState(10);
+  const [coldIncludeBonus, setColdIncludeBonus] = useState(true);
+  const [coldNumbers, setColdNumbers] = useState([]);
 
+  // 검색 필터링
   useEffect(() => {
     if (historyData && historyData.history) {
-      setFilteredHistory(historyData.history);
-      
-      // 통계 계산
-      const totalRounds = historyData.history.length;
-      const numberCounts = Array(46).fill(0);
-      let totalOdd = 0;
-      const decadeCounts = { '1-10': 0, '11-20': 0, '21-30': 0, '31-40': 0, '41-45': 0 };
-      
-      historyData.history.forEach(round => {
-        round.numbers.forEach(num => {
-          numberCounts[num]++;
-          if (num % 2 !== 0) totalOdd++;
-          
-          if (num <= 10) decadeCounts['1-10']++;
-          else if (num <= 20) decadeCounts['11-20']++;
-          else if (num <= 30) decadeCounts['21-30']++;
-          else if (num <= 40) decadeCounts['31-40']++;
-          else decadeCounts['41-45']++;
-        });
-      });
+      let newFilteredHistory = historyData.history;
 
-      // 가장 많이 나온 번호 Top 5
-      const topNumbers = numberCounts
-        .map((count, num) => ({ num, count }))
-        .filter(item => item.num > 0)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-      // 미출현 번호 (최근 10회 기준)
-      const recentRounds = historyData.history.slice(0, 10);
-      const recentNumbers = new Set();
-      recentRounds.forEach(round => {
-        round.numbers.forEach(num => recentNumbers.add(num));
-      });
-      const coldNumbers = Array.from({ length: 45 }, (_, i) => i + 1)
-        .filter(num => !recentNumbers.has(num));
-
-      setStats({
-        totalRounds,
-        topNumbers,
-        coldNumbers,
-        oddRatio: Math.round((totalOdd / (totalRounds * 6)) * 100),
-        decadeCounts
-      });
-    }
-  }, [historyData]);
-
-  useEffect(() => {
-    if (historyData && historyData.history) {
+      // 1. 회차 검색
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        const filtered = historyData.history.filter(item => 
-          item.round.toString().includes(term) || 
-          item.date.includes(term)
+        newFilteredHistory = newFilteredHistory.filter(item => 
+          item.round.toString().includes(term)
         );
-        setFilteredHistory(filtered);
-      } else {
-        setFilteredHistory(historyData.history);
       }
+
+      // 2. 번호 검색
+      if (searchNumbers.length > 0) {
+        newFilteredHistory = newFilteredHistory.filter(item => {
+          const numbersToSearch = new Set(item.numbers);
+          if (searchIncludeBonus) {
+            numbersToSearch.add(item.bonus);
+          }
+          return searchNumbers.every(num => numbersToSearch.has(num));
+        });
+      }
+
+      setFilteredHistory(newFilteredHistory);
     }
-  }, [searchTerm, historyData]);
+  }, [searchTerm, searchNumbers, searchIncludeBonus, historyData]);
+
+  // 미출현 번호 계산
+  useEffect(() => {
+    if (historyData && historyData.history) {
+      const recentRounds = historyData.history.slice(0, coldPeriod);
+      const appearedNumbers = new Set();
+      
+      recentRounds.forEach(round => {
+        round.numbers.forEach(num => appearedNumbers.add(num));
+        if (coldIncludeBonus) {
+          appearedNumbers.add(round.bonus);
+        }
+      });
+      
+      const missing = Array.from({ length: 45 }, (_, i) => i + 1)
+        .filter(num => !appearedNumbers.has(num));
+        
+      setColdNumbers(missing);
+    }
+  }, [historyData, coldPeriod, coldIncludeBonus]);
+
+  const toggleSearchNumber = (num) => {
+    setSearchNumbers(prev => 
+      prev.includes(num) 
+        ? prev.filter(n => n !== num)
+        : [...prev, num].sort((a, b) => a - b)
+    );
+  };
 
   if (loading) {
     return (
@@ -324,7 +321,6 @@ const AnalysisView = ({ historyData, loading, error }) => {
     return (
       <div className="error-container">
         <p>{error}</p>
-        {/* 디버깅용 상세 에러 메시지 표시 (개발 환경 또는 필요 시) */}
         {error.includes('JSON') && <p className="text-sm text-gray-500 mt-2">서버 응답 형식이 올바르지 않습니다.</p>}
       </div>
     );
@@ -339,7 +335,6 @@ const AnalysisView = ({ historyData, loading, error }) => {
         <div className="hero-content">
           <div className="hero-badge">최신 회차</div>
           <h2 className="hero-title">{historyData.latestRound}회 당첨결과</h2>
-          <p className="hero-date">{historyData.history[0]?.date}</p>
           <div className="hero-balls">
             {historyData.history[0]?.numbers.map(num => (
               <LottoBall key={num} number={num} />
@@ -351,49 +346,42 @@ const AnalysisView = ({ historyData, loading, error }) => {
       </div>
 
       {/* 통계 대시보드 */}
-      {stats && (
-        <div className="analysis-grid">
-          <div className="chart-card">
-            <div className="chart-title">자주 나온 번호 (Top 5)</div>
-            <BarChart 
-              data={stats.topNumbers.reduce((acc, curr) => ({ ...acc, [`${curr.num}번`]: curr.count }), {})}
-              maxValue={stats.topNumbers[0]?.count || 1}
-            />
-          </div>
-          
-          <div className="chart-card">
-            <div className="chart-title">홀짝 비율 (전체)</div>
-            <DonutChart 
-              value={stats.oddRatio}
-              total={100}
-              label="%"
-              primaryLabel="홀수"
-              secondaryLabel="짝수"
-            />
-          </div>
-
-          <div className="chart-card">
-            <div className="chart-title">구간별 출현 분포</div>
-            <BarChart 
-              data={stats.decadeCounts}
-              maxValue={Math.max(...Object.values(stats.decadeCounts))}
-            />
-          </div>
-
-          <div className="chart-card">
-            <div className="chart-title">최근 10회 미출현 번호</div>
-            <div className="cold-numbers">
-              {stats.coldNumbers.length > 0 ? (
-                stats.coldNumbers.map(num => (
-                  <span key={num} className="cold-number-tag">{num}</span>
-                ))
-              ) : (
-                <span className="empty-text">미출현 번호 없음</span>
-              )}
+      <div className="analysis-grid">
+        <div className="chart-card" style={{ gridColumn: '1 / -1' }}>
+          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+            <div className="chart-title" style={{ marginBottom: 0 }}>미출현 번호 분석</div>
+            <div className="chart-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <select 
+                value={coldPeriod} 
+                onChange={(e) => setColdPeriod(Number(e.target.value))}
+                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.9rem' }}
+              >
+                {[5, 10, 15, 20, 25, 30].map(p => (
+                  <option key={p} value={p}>최근 {p}회</option>
+                ))}
+              </select>
+              <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={coldIncludeBonus} 
+                  onChange={(e) => setColdIncludeBonus(e.target.checked)} 
+                  style={{ width: '16px', height: '16px' }}
+                />
+                보너스 포함
+              </label>
             </div>
           </div>
+          <div className="cold-numbers">
+            {coldNumbers.length > 0 ? (
+              coldNumbers.map(num => (
+                <span key={num} className="cold-number-tag">{num}</span>
+              ))
+            ) : (
+              <span className="empty-text">해당 기간 동안 모든 번호가 출현했습니다.</span>
+            )}
+          </div>
         </div>
-      )}
+      </div>
 
       {/* 회차별 이력 리스트 */}
       <div className="card history-list-card">
@@ -402,20 +390,43 @@ const AnalysisView = ({ historyData, loading, error }) => {
             <Icons.List />
             회차별 당첨 이력
           </div>
-          <div className="search-box">
-            <Icons.Search />
-            <input 
-              type="text" 
-              placeholder="회차 또는 날짜 검색" 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="search-controls-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+            <div className="search-box">
+              <Icons.Search />
+              <input 
+                type="text" 
+                placeholder="회차 검색" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="search-box">
+              <Icons.Search />
+              <input 
+                type="text" 
+                placeholder="번호로 검색 (쉼표로 구분)"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const nums = e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n > 0 && n <= 45);
+                    setSearchNumbers(Array.from(new Set(nums)));
+                  }
+                }}
+              />
+            </div>
+            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
+              <input 
+                type="checkbox" 
+                checked={searchIncludeBonus} 
+                onChange={(e) => setSearchIncludeBonus(e.target.checked)} 
+                style={{ width: '16px', height: '16px' }}
+              />
+              보너스 포함
+            </label>
           </div>
         </div>
         <div className="history-list">
           <div className="history-header-row">
             <span className="col-round">회차</span>
-            <span className="col-date">추첨일</span>
             <span className="col-numbers">당첨번호</span>
             <span className="col-bonus">보너스</span>
           </div>
@@ -423,7 +434,6 @@ const AnalysisView = ({ historyData, loading, error }) => {
             {filteredHistory.map(item => (
               <div key={item.round} className="history-item">
                 <span className="col-round">{item.round}회</span>
-                <span className="col-date">{item.date}</span>
                 <div className="col-numbers">
                   {item.numbers.map(num => (
                     <LottoBall key={num} number={num} small />
