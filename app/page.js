@@ -324,6 +324,8 @@ const AnalysisView = ({ historyData, loading, error }) => {
     return (
       <div className="error-container">
         <p>{error}</p>
+        {/* 디버깅용 상세 에러 메시지 표시 (개발 환경 또는 필요 시) */}
+        {error.includes('JSON') && <p className="text-sm text-gray-500 mt-2">서버 응답 형식이 올바르지 않습니다.</p>}
       </div>
     );
   }
@@ -491,8 +493,13 @@ export default function Home() {
         setHistoryLoading(true);
         try {
           const res = await fetch('/api/history');
-          if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
           const data = await res.json();
+          
+          if (!res.ok) {
+            // 서버에서 반환한 에러 메시지 사용
+            throw new Error(data.error || '데이터를 불러오는데 실패했습니다.');
+          }
+
           setHistoryData(data);
         } catch (err) {
           setHistoryError(err.message);
