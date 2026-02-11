@@ -7,7 +7,7 @@ import datetime
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Define potential paths for the Excel file to handle different environments (Local vs Vercel)
+            # Define potential paths for the Excel file
             possible_paths = [
                 os.path.join(os.path.dirname(__file__), '..', 'lottery', 'winningNumbers.xlsx'),
                 os.path.join(os.getcwd(), 'lottery', 'winningNumbers.xlsx'),
@@ -24,7 +24,6 @@ class handler(BaseHTTPRequestHandler):
                     excel_path = full_path
                     break
 
-            # Check if the file exists
             if not excel_path:
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
@@ -32,13 +31,35 @@ class handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     'error': 'Excel file not found.',
-                    'checked_paths': checked_paths,
-                    'cwd': os.getcwd()
+                    'checked_paths': checked_paths
                 }).encode())
                 return
 
-            # Read the Excel file
             try:
+                # Read Excel file
+                # Header is at row 0 (first row).
+                # Columns based on user description:
+                # Index 0: No
+                # Index 1: 회차
+                # Index 2~7: 당첨번호 (6개)
+                # Index 8: 보너스
+                # Index 9: 순위
+                # Index 10: 당첨게임수
+                # Index 11: 1게임당 당첨금액
+
+                # Note: The user mentioned merged cells in the header row for "당첨번호".
+                # Pandas read_excel handles merged cells by filling the value in the top-left cell
+                # and leaving others as NaN or empty, but since we are accessing by index (iloc),
+                # the header structure matters less as long as the data rows are consistent.
+                # However, if the header row is complex (merged cells), it might be safer to skip the header
+                # or read without header and manually process.
+                # Let's try reading with header=1 (skipping the first row which might be the complex header)
+                # or just read normally and iterate carefully.
+
+                # Given the description:
+                # Row 0: Header (with merged cells)
+                # Row 1+: Data
+
                 df = pd.read_excel(excel_path, engine='openpyxl')
             except Exception as e:
                 self.send_response(500)
@@ -48,52 +69,55 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': f'Failed to read Excel file: {str(e)}'}).encode())
                 return
 
-            # Clean column names (strip whitespace)
-            df.columns = df.columns.str.strip()
-
-            # Expected columns
-            required_columns = ['회차', '추첨일', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6', '보너스']
-
-            # Check if required columns exist
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'error': 'Missing required columns in Excel file.',
-                    'missing_columns': missing_columns,
-                    'available_columns': df.columns.tolist()
-                }, ensure_ascii=False).encode('utf-8'))
-                return
-
-            # Process the DataFrame into the desired JSON format
             history_data = []
             parsing_errors = []
 
+            # Iterate through rows
             for index, row in df.iterrows():
                 try:
-                    numbers = [
-                        int(row['번호1']), int(row['번호2']), int(row['번호3']),
-                        int(row['번호4']), int(row['번호5']), int(row['번호6'])
-                    ]
+                    # Access by position (integer location) to avoid column name issues
+                    # Ensure we have enough columns
+                    if len(row) < 9:
+                        continue
 
-                    # Handle date format
-                    date_val = row['추첨일']
-                    if isinstance(date_val, (datetime.date, datetime.datetime)):
-                        date_str = date_val.strftime('%Y-%m-%d')
-                    else:
-                        date_str = str(date_val)
+                    # Parse Round (Index 1)
+                    # The value might be a string like "1,210" or an integer
+                    raw_round = row.iloc[1]
+                    if pd.isna(raw_round):
+                        continue
+
+                    # Clean up the round string (remove commas, spaces)
+                    round_str = str(raw_round).replace(',', '').replace('회', '').strip()
+                    if not round_str.isdigit():
+                         continue
+                    round_num = int(round_str)
+
+                    # Parse Numbers (Index 2-7)
+                    numbers = []
+                    for i in range(2, 8):
+                        val = row.iloc[i]
+                        # Handle potential non-numeric values or floats
+                        if pd.isna(val):
+                            raise ValueError(f"Missing number at index {i}")
+                        numbers.append(int(val))
+
+                    # Parse Bonus (Index 8)
+                    bonus_val = row.iloc[8]
+                    if pd.isna(bonus_val):
+                         raise ValueError("Missing bonus number")
+                    bonus = int(bonus_val)
+
+                    # Date is missing in the provided format description.
+                    # We'll set it to a placeholder.
+                    date_str = ""
 
                     history_data.append({
-                        'round': int(row['회차']),
+                        'round': round_num,
                         'date': date_str,
                         'numbers': sorted(numbers),
-                        'bonus': int(row['보너스'])
+                        'bonus': bonus
                     })
                 except Exception as e:
-                    # Collect errors for debugging if needed, but limit size
                     if len(parsing_errors) < 5:
                         parsing_errors.append(f"Row {index}: {str(e)}")
                     continue
@@ -106,7 +130,8 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({
                     'error': 'No valid data parsed from Excel file.',
                     'parsing_errors_sample': parsing_errors,
-                    'columns': df.columns.tolist()
+                    'columns': df.columns.tolist(),
+                    'first_row': str(df.iloc[0].tolist()) if not df.empty else 'Empty'
                 }, ensure_ascii=False).encode('utf-8'))
                 return
 
@@ -122,7 +147,7 @@ class handler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*') # Allow CORS
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
 
