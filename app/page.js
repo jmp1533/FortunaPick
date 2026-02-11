@@ -243,7 +243,9 @@ const NumberComboBox = ({
 
 // 분석 화면 컴포넌트
 const AnalysisView = ({ historyData, loading, error }) => {
+  const [activeTab, setActiveTab] = useState('cold'); // 'cold' or 'history'
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchNumberInput, setSearchNumberInput] = useState('');
   const [searchNumbers, setSearchNumbers] = useState([]);
   const [searchIncludeBonus, setSearchIncludeBonus] = useState(true);
   const [filteredHistory, setFilteredHistory] = useState([]);
@@ -300,12 +302,24 @@ const AnalysisView = ({ historyData, loading, error }) => {
     }
   }, [historyData, coldPeriod, coldIncludeBonus]);
 
-  const toggleSearchNumber = (num) => {
-    setSearchNumbers(prev => 
-      prev.includes(num) 
-        ? prev.filter(n => n !== num)
-        : [...prev, num].sort((a, b) => a - b)
-    );
+  const handleSearchNumberAdd = () => {
+    if (!searchNumberInput.trim()) return;
+    
+    const nums = searchNumberInput.split(',')
+      .map(n => parseInt(n.trim()))
+      .filter(n => !isNaN(n) && n > 0 && n <= 45);
+      
+    if (nums.length > 0) {
+      setSearchNumbers(prev => {
+        const newSet = new Set([...prev, ...nums]);
+        return Array.from(newSet).sort((a, b) => a - b);
+      });
+      setSearchNumberInput('');
+    }
+  };
+
+  const removeSearchNumber = (num) => {
+    setSearchNumbers(prev => prev.filter(n => n !== num));
   };
 
   if (loading) {
@@ -345,108 +359,194 @@ const AnalysisView = ({ historyData, loading, error }) => {
         </div>
       </div>
 
-      {/* 통계 대시보드 */}
-      <div className="analysis-grid">
-        <div className="chart-card" style={{ gridColumn: '1 / -1' }}>
-          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
-            <div className="chart-title" style={{ marginBottom: 0 }}>미출현 번호 분석</div>
-            <div className="chart-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <select 
-                value={coldPeriod} 
-                onChange={(e) => setColdPeriod(Number(e.target.value))}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.9rem' }}
-              >
-                {[5, 10, 15, 20, 25, 30].map(p => (
-                  <option key={p} value={p}>최근 {p}회</option>
-                ))}
-              </select>
+      {/* 분석 탭 네비게이션 */}
+      <div className="tabs">
+        <button 
+          className={`tab-btn ${activeTab === 'cold' ? 'active' : ''}`}
+          onClick={() => setActiveTab('cold')}
+        >
+          미출현 번호 분석
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          회차별 당첨 이력
+        </button>
+      </div>
+
+      {/* 미출현 번호 분석 탭 */}
+      {activeTab === 'cold' && (
+        <div className="analysis-grid">
+          <div className="chart-card" style={{ gridColumn: '1 / -1' }}>
+            <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+              <div className="chart-title" style={{ marginBottom: 0 }}>미출현 번호</div>
+              <div className="chart-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <select 
+                  value={coldPeriod} 
+                  onChange={(e) => setColdPeriod(Number(e.target.value))}
+                  style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.9rem' }}
+                >
+                  {[5, 10, 15, 20, 25, 30].map(p => (
+                    <option key={p} value={p}>최근 {p}회</option>
+                  ))}
+                </select>
+                <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={coldIncludeBonus} 
+                    onChange={(e) => setColdIncludeBonus(e.target.checked)} 
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  보너스 포함
+                </label>
+              </div>
+            </div>
+            <div className="cold-numbers">
+              {coldNumbers.length > 0 ? (
+                coldNumbers.map(num => (
+                  <span key={num} className="cold-number-tag">{num}</span>
+                ))
+              ) : (
+                <span className="empty-text">해당 기간 동안 모든 번호가 출현했습니다.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 회차별 당첨 이력 탭 */}
+      {activeTab === 'history' && (
+        <div className="card history-list-card">
+          <div className="card-header">
+            <div className="card-title">
+              <Icons.List />
+              회차별 당첨 이력
+            </div>
+          </div>
+          
+          {/* 검색 컨트롤 영역 */}
+          <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 회차 검색 */}
+              <div className="search-box" style={{ background: 'white' }}>
+                <Icons.Search />
+                <input 
+                  type="text" 
+                  placeholder="회차 검색 (예: 1000)" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              
+              {/* 번호 검색 */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="search-box" style={{ background: 'white', flex: 1 }}>
+                  <Icons.Search />
+                  <input 
+                    type="text" 
+                    placeholder="번호 입력 (예: 1, 7, 45)"
+                    value={searchNumberInput}
+                    onChange={(e) => setSearchNumberInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSearchNumberAdd();
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <button 
+                  onClick={handleSearchNumberAdd}
+                  style={{
+                    padding: '0 16px',
+                    background: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  추가
+                </button>
+              </div>
+
+              {/* 선택된 검색 번호 태그들 */}
+              {searchNumbers.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                  {searchNumbers.map(num => (
+                    <div key={num} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '4px', 
+                      background: 'var(--primary-bg)', 
+                      color: 'var(--primary)', 
+                      padding: '4px 8px', 
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600'
+                    }}>
+                      <span>{num}</span>
+                      <button 
+                        onClick={() => removeSearchNumber(num)}
+                        style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, display: 'flex' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => setSearchNumbers([])}
+                    style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    전체 삭제
+                  </button>
+                </div>
+              )}
+
+              {/* 옵션 */}
               <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
                 <input 
                   type="checkbox" 
-                  checked={coldIncludeBonus} 
-                  onChange={(e) => setColdIncludeBonus(e.target.checked)} 
+                  checked={searchIncludeBonus} 
+                  onChange={(e) => setSearchIncludeBonus(e.target.checked)} 
                   style={{ width: '16px', height: '16px' }}
                 />
-                보너스 포함
+                검색 시 보너스 번호 포함
               </label>
             </div>
           </div>
-          <div className="cold-numbers">
-            {coldNumbers.length > 0 ? (
-              coldNumbers.map(num => (
-                <span key={num} className="cold-number-tag">{num}</span>
-              ))
-            ) : (
-              <span className="empty-text">해당 기간 동안 모든 번호가 출현했습니다.</span>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* 회차별 이력 리스트 */}
-      <div className="card history-list-card">
-        <div className="card-header">
-          <div className="card-title">
-            <Icons.List />
-            회차별 당첨 이력
-          </div>
-          <div className="search-controls-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-            <div className="search-box">
-              <Icons.Search />
-              <input 
-                type="text" 
-                placeholder="회차 검색" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="history-list">
+            <div className="history-header-row">
+              <span className="col-round">회차</span>
+              <span className="col-numbers">당첨번호</span>
+              <span className="col-bonus">보너스</span>
             </div>
-            <div className="search-box">
-              <Icons.Search />
-              <input 
-                type="text" 
-                placeholder="번호로 검색 (쉼표로 구분)"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const nums = e.target.value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n > 0 && n <= 45);
-                    setSearchNumbers(Array.from(new Set(nums)));
-                  }
-                }}
-              />
-            </div>
-            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
-              <input 
-                type="checkbox" 
-                checked={searchIncludeBonus} 
-                onChange={(e) => setSearchIncludeBonus(e.target.checked)} 
-                style={{ width: '16px', height: '16px' }}
-              />
-              보너스 포함
-            </label>
-          </div>
-        </div>
-        <div className="history-list">
-          <div className="history-header-row">
-            <span className="col-round">회차</span>
-            <span className="col-numbers">당첨번호</span>
-            <span className="col-bonus">보너스</span>
-          </div>
-          <div className="history-items">
-            {filteredHistory.map(item => (
-              <div key={item.round} className="history-item">
-                <span className="col-round">{item.round}회</span>
-                <div className="col-numbers">
-                  {item.numbers.map(num => (
-                    <LottoBall key={num} number={num} small />
-                  ))}
+            <div className="history-items">
+              {filteredHistory.length > 0 ? (
+                filteredHistory.map(item => (
+                  <div key={item.round} className="history-item">
+                    <span className="col-round">{item.round}회</span>
+                    <div className="col-numbers">
+                      {item.numbers.map(num => (
+                        <LottoBall key={num} number={num} small />
+                      ))}
+                    </div>
+                    <span className="col-bonus">
+                      <LottoBall number={item.bonus} small />
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  검색 결과가 없습니다.
                 </div>
-                <span className="col-bonus">
-                  <LottoBall number={item.bonus} small />
-                </span>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
