@@ -36,30 +36,6 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             try:
-                # Read Excel file
-                # Header is at row 0 (first row).
-                # Columns based on user description:
-                # Index 0: No
-                # Index 1: 회차
-                # Index 2~7: 당첨번호 (6개)
-                # Index 8: 보너스
-                # Index 9: 순위
-                # Index 10: 당첨게임수
-                # Index 11: 1게임당 당첨금액
-
-                # Note: The user mentioned merged cells in the header row for "당첨번호".
-                # Pandas read_excel handles merged cells by filling the value in the top-left cell
-                # and leaving others as NaN or empty, but since we are accessing by index (iloc),
-                # the header structure matters less as long as the data rows are consistent.
-                # However, if the header row is complex (merged cells), it might be safer to skip the header
-                # or read without header and manually process.
-                # Let's try reading with header=1 (skipping the first row which might be the complex header)
-                # or just read normally and iterate carefully.
-
-                # Given the description:
-                # Row 0: Header (with merged cells)
-                # Row 1+: Data
-
                 df = pd.read_excel(excel_path, engine='openpyxl')
             except Exception as e:
                 self.send_response(500)
@@ -75,18 +51,14 @@ class handler(BaseHTTPRequestHandler):
             # Iterate through rows
             for index, row in df.iterrows():
                 try:
-                    # Access by position (integer location) to avoid column name issues
-                    # Ensure we have enough columns
                     if len(row) < 9:
                         continue
 
                     # Parse Round (Index 1)
-                    # The value might be a string like "1,210" or an integer
                     raw_round = row.iloc[1]
                     if pd.isna(raw_round):
                         continue
 
-                    # Clean up the round string (remove commas, spaces)
                     round_str = str(raw_round).replace(',', '').replace('회', '').strip()
                     if not round_str.isdigit():
                          continue
@@ -96,10 +68,11 @@ class handler(BaseHTTPRequestHandler):
                     numbers = []
                     for i in range(2, 8):
                         val = row.iloc[i]
-                        # Handle potential non-numeric values or floats
                         if pd.isna(val):
                             raise ValueError(f"Missing number at index {i}")
                         numbers.append(int(val))
+
+                    sorted_numbers = sorted(numbers)
 
                     # Parse Bonus (Index 8)
                     bonus_val = row.iloc[8]
@@ -107,15 +80,36 @@ class handler(BaseHTTPRequestHandler):
                          raise ValueError("Missing bonus number")
                     bonus = int(bonus_val)
 
+                    # Calculate Stats
+                    # 1. Sum
+                    total_sum = sum(sorted_numbers)
+
+                    # 2. Odd/Even Ratio
+                    odd_count = sum(1 for n in sorted_numbers if n % 2 != 0)
+                    even_count = 6 - odd_count
+                    odd_even = f"{odd_count}:{even_count}"
+
+                    # 3. AC Value
+                    # AC = (Unique differences between pairs) - (N - 1)
+                    diffs = set()
+                    for i in range(len(sorted_numbers)):
+                        for j in range(i + 1, len(sorted_numbers)):
+                            diffs.add(abs(sorted_numbers[i] - sorted_numbers[j]))
+                    ac_value = len(diffs) - 5
+
                     # Date is missing in the provided format description.
-                    # We'll set it to a placeholder.
                     date_str = ""
 
                     history_data.append({
                         'round': round_num,
                         'date': date_str,
-                        'numbers': sorted(numbers),
-                        'bonus': bonus
+                        'numbers': sorted_numbers,
+                        'bonus': bonus,
+                        'stats': {
+                            'sum': total_sum,
+                            'oddEven': odd_even,
+                            'ac': ac_value
+                        }
                     })
                 except Exception as e:
                     if len(parsing_errors) < 5:

@@ -522,6 +522,7 @@ const AnalysisView = ({ historyData, loading, error }) => {
               <span className="col-round">회차</span>
               <span className="col-numbers">당첨번호</span>
               <span className="col-bonus">보너스</span>
+              <span className="col-stats">통계 (합/홀짝/AC)</span>
             </div>
             <div className="history-items">
               {filteredHistory.length > 0 ? (
@@ -536,6 +537,17 @@ const AnalysisView = ({ historyData, loading, error }) => {
                     <span className="col-bonus">
                       <LottoBall number={item.bonus} small />
                     </span>
+                    <div className="col-stats">
+                      {item.stats ? (
+                        <>
+                          <span className="meta-badge">합 {item.stats.sum}</span>
+                          <span className="meta-badge">{item.stats.oddEven}</span>
+                          <span className="meta-badge highlight">AC {item.stats.ac}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
@@ -596,30 +608,33 @@ export default function Home() {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
 
-  // 당첨 이력 데이터 로드
+  // 당첨 이력 데이터 로드 (메인 페이지 접속 시 백그라운드 로드)
   useEffect(() => {
-    if (activeView === 'analysis' && !historyData) {
-      const fetchHistory = async () => {
-        setHistoryLoading(true);
-        try {
-          const res = await fetch('/api/history');
-          const data = await res.json();
-          
-          if (!res.ok) {
-            // 서버에서 반환한 에러 메시지 사용
-            throw new Error(data.error || '데이터를 불러오는데 실패했습니다.');
-          }
+    // 이미 데이터가 있거나 로딩 중이면 스킵
+    if (historyData || historyLoading) return;
 
-          setHistoryData(data);
-        } catch (err) {
-          setHistoryError(err.message);
-        } finally {
-          setHistoryLoading(false);
+    const fetchHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || '데이터를 불러오는데 실패했습니다.');
         }
-      };
-      fetchHistory();
-    }
-  }, [activeView, historyData]);
+        
+        setHistoryData(data);
+      } catch (err) {
+        console.error("Failed to load history data in background:", err);
+        setHistoryError(err.message);
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    // 백그라운드에서 조용히 실행
+    fetchHistory();
+  }, []); // 빈 의존성 배열로 마운트 시 한 번만 실행
 
   // 외부 클릭 감지하여 드롭다운 닫기
   useEffect(() => {
