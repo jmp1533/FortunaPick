@@ -30,21 +30,48 @@ class handler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                # Include checked paths for debugging purposes
                 self.wfile.write(json.dumps({
                     'error': 'Excel file not found.',
                     'checked_paths': checked_paths,
-                    'cwd': os.getcwd(),
-                    'script_dir': os.path.dirname(__file__)
+                    'cwd': os.getcwd()
                 }).encode())
                 return
 
             # Read the Excel file
-            # Assuming columns: '회차', '추첨일', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6', '보너스'
-            df = pd.read_excel(excel_path, engine='openpyxl')
+            try:
+                df = pd.read_excel(excel_path, engine='openpyxl')
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Failed to read Excel file: {str(e)}'}).encode())
+                return
+
+            # Clean column names (strip whitespace)
+            df.columns = df.columns.str.strip()
+
+            # Expected columns
+            required_columns = ['회차', '추첨일', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6', '보너스']
+
+            # Check if required columns exist
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'Missing required columns in Excel file.',
+                    'missing_columns': missing_columns,
+                    'available_columns': df.columns.tolist()
+                }, ensure_ascii=False).encode('utf-8'))
+                return
 
             # Process the DataFrame into the desired JSON format
             history_data = []
+            parsing_errors = []
+
             for index, row in df.iterrows():
                 try:
                     numbers = [
@@ -66,8 +93,22 @@ class handler(BaseHTTPRequestHandler):
                         'bonus': int(row['보너스'])
                     })
                 except Exception as e:
-                    # Skip rows with errors
+                    # Collect errors for debugging if needed, but limit size
+                    if len(parsing_errors) < 5:
+                        parsing_errors.append(f"Row {index}: {str(e)}")
                     continue
+
+            if not history_data:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'No valid data parsed from Excel file.',
+                    'parsing_errors_sample': parsing_errors,
+                    'columns': df.columns.tolist()
+                }, ensure_ascii=False).encode('utf-8'))
+                return
 
             # Sort history by round in descending order
             history_data.sort(key=lambda x: x['round'], reverse=True)
@@ -90,7 +131,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+            self.wfile.write(json.dumps({'error': f'Unexpected error: {str(e)}'}).encode())
 
     def do_OPTIONS(self):
         self.send_response(200)
