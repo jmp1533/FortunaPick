@@ -826,6 +826,23 @@ body {
   height: 9px;
 }
 
+/* 이월 번호 스타일 */
+.lotto-ball.carry-over {
+  border: 2px solid #EF4444; /* 빨간색 테두리 */
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+.carry-over-mark {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background-color: #EF4444;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
 .result-meta {
   display: flex;
   gap: 8px;
@@ -1405,6 +1422,7 @@ body {
 .col-numbers {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap; /* 모바일에서 줄바꿈 허용 */
 }
 
 .col-stats {
@@ -1427,18 +1445,18 @@ body {
   }
 
   .lotto-ball {
-    width: 36px;
-    height: 36px;
-    font-size: 0.9rem;
+    width: 32px; /* 모바일에서 공 크기 줄임 */
+    height: 32px;
+    font-size: 0.8rem;
   }
   
   .lotto-ball::before {
-    width: 20px;
-    height: 10px;
+    width: 18px;
+    height: 9px;
   }
   
   .result-balls {
-    gap: 5px;
+    gap: 4px;
   }
   
   .result-meta {
@@ -1473,12 +1491,80 @@ body {
     font-size: 1.3rem;
   }
 
+  /* 회차별 당첨 이력 모바일 레이아웃 조정 */
   .history-header-row, .history-item {
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 60px 1fr; /* 2열 구조로 변경 */
     gap: 10px;
+    padding: 10px;
   }
 
-  .col-date, .col-bonus, .col-stats {
-    display: none;
+  .col-round {
+    font-size: 0.8rem;
+  }
+
+  .col-numbers {
+    gap: 4px;
+    justify-content: flex-start;
+  }
+
+  /* 모바일에서 보너스 번호와 통계는 숨기거나 다른 방식으로 표시해야 함 */
+  /* 여기서는 간단하게 숨김 처리하거나, 필요하다면 레이아웃을 더 복잡하게 변경해야 함 */
+  /* 요청사항: "한 줄이 모두 잘 보이도록" -> 보너스 번호까지 포함하려면 줄바꿈이 필요할 수 있음 */
+
+  /* 모바일에서 보너스 번호를 당첨 번호 뒤에 붙여서 표시하는 방식 고려 */
+  .col-bonus {
+    display: none; /* 일단 헤더와 별도 컬럼은 숨김 */
+  }
+
+  .col-stats {
+    display: none; /* 통계도 공간 부족으로 숨김 */
+  }
+
+  /* 모바일용 보너스 번호 표시 (JS에서 처리하거나 CSS로 조정) */
+  /* 현재 구조상 col-bonus가 별도 div이므로 grid 레이아웃 변경만으로는 합치기 어려움 */
+  /* 대신 history-item 내부 구조를 flex로 바꾸고 줄바꿈을 허용하는 것이 나을 수 있음 */
+}
+
+/* 모바일 최적화를 위한 추가 미디어 쿼리 */
+@media (max-width: 768px) {
+  .history-header-row {
+    display: none; /* 모바일에서는 헤더 숨김 */
+  }
+
+  .history-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-round {
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+  }
+
+  .col-numbers {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .col-bonus {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .col-bonus::before {
+    content: '보너스:';
+  }
+
+  .col-stats {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
   }
 }

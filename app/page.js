@@ -81,11 +81,12 @@ const Icons = {
 };
 
 // 동행복권 스타일 로또 공 컴포넌트
-const LottoBall = ({ number, small = false }) => {
+const LottoBall = ({ number, small = false, isCarryOver = false }) => {
   const colorClass = getBallColorClass(number);
   return (
-    <span className={`lotto-ball ${colorClass} ${small ? 'small' : ''}`}>
+    <span className={`lotto-ball ${colorClass} ${small ? 'small' : ''} ${isCarryOver ? 'carry-over' : ''}`}>
       {number}
+      {isCarryOver && <span className="carry-over-mark" />}
     </span>
   );
 };
@@ -256,7 +257,7 @@ const AnalysisView = ({ historyData, loading, error }) => {
   const [coldIncludeBonus, setColdIncludeBonus] = useState(true);
   const [coldNumbers, setColdNumbers] = useState([]);
 
-  // 검색 필터링
+  // 검색 필터링 및 이월 번호 계산
   useEffect(() => {
     if (historyData && historyData.history) {
       let newFilteredHistory = historyData.history;
@@ -280,7 +281,33 @@ const AnalysisView = ({ historyData, loading, error }) => {
         });
       }
 
-      setFilteredHistory(newFilteredHistory);
+      // 이월 번호 계산 (이전 회차 번호와 비교)
+      // historyData.history는 내림차순 정렬되어 있으므로, 현재 인덱스 + 1이 이전 회차임
+      const historyWithCarryOver = newFilteredHistory.map((item) => {
+        // 전체 히스토리에서 현재 아이템의 인덱스를 찾음 (필터링 전 원본 데이터 기준)
+        const originalIndex = historyData.history.findIndex(h => h.round === item.round);
+        
+        // 이전 회차 데이터가 있는지 확인 (마지막 회차가 아니면 존재)
+        let carryOverNumbers = new Set();
+        
+        if (originalIndex < historyData.history.length - 1) {
+          const prevRound = historyData.history[originalIndex + 1];
+          const prevNumbers = new Set([...prevRound.numbers, prevRound.bonus]);
+          
+          // 현재 회차 번호 중 이전 회차에 포함된 번호 찾기
+          item.numbers.forEach(num => {
+            if (prevNumbers.has(num)) carryOverNumbers.add(num);
+          });
+          if (prevNumbers.has(item.bonus)) carryOverNumbers.add(item.bonus);
+        }
+        
+        return {
+          ...item,
+          carryOverNumbers
+        };
+      });
+
+      setFilteredHistory(historyWithCarryOver);
     }
   }, [searchTerm, searchNumbers, searchIncludeBonus, historyData]);
 
@@ -551,11 +578,20 @@ const AnalysisView = ({ historyData, loading, error }) => {
                       <span className="col-round">{item.round}회</span>
                       <div className="col-numbers">
                         {item.numbers.map(num => (
-                          <LottoBall key={num} number={num} small />
+                          <LottoBall 
+                            key={num} 
+                            number={num} 
+                            small 
+                            isCarryOver={item.carryOverNumbers && item.carryOverNumbers.has(num)} 
+                          />
                         ))}
                       </div>
                       <span className="col-bonus">
-                        <LottoBall number={item.bonus} small />
+                        <LottoBall 
+                          number={item.bonus} 
+                          small 
+                          isCarryOver={item.carryOverNumbers && item.carryOverNumbers.has(item.bonus)} 
+                        />
                       </span>
                       <div className="col-stats">
                         {item.stats ? (
