@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from 'react';
+import AdBanner from './components/AdBanner';
+import { ADSENSE_CONFIG } from './utils/ads';
 import { 
   FILTER_DEFINITIONS, 
   calculateAC, 
@@ -359,6 +361,9 @@ const AnalysisView = ({ historyData, loading, error }) => {
         </div>
       </div>
 
+      {/* 광고 영역 (상단) */}
+      <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} />
+
       {/* 분석 탭 네비게이션 */}
       <div className="tabs">
         <button 
@@ -411,6 +416,11 @@ const AnalysisView = ({ historyData, loading, error }) => {
                 <span className="empty-text">해당 기간 동안 모든 번호가 출현했습니다.</span>
               )}
             </div>
+          </div>
+          
+          {/* 광고 영역 (중간) */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_MIDDLE} />
           </div>
         </div>
       )}
@@ -526,27 +536,33 @@ const AnalysisView = ({ historyData, loading, error }) => {
             </div>
             <div className="history-items">
               {filteredHistory.length > 0 ? (
-                filteredHistory.map(item => (
-                  <div key={item.round} className="history-item">
-                    <span className="col-round">{item.round}회</span>
-                    <div className="col-numbers">
-                      {item.numbers.map(num => (
-                        <LottoBall key={num} number={num} small />
-                      ))}
-                    </div>
-                    <span className="col-bonus">
-                      <LottoBall number={item.bonus} small />
-                    </span>
-                    <div className="col-stats">
-                      {item.stats ? (
-                        <>
-                          <span className="meta-badge">합 {item.stats.sum}</span>
-                          <span className="meta-badge">{item.stats.oddEven}</span>
-                          <span className="meta-badge highlight">AC {item.stats.ac}</span>
-                        </>
-                      ) : (
-                        <span className="text-muted">-</span>
-                      )}
+                filteredHistory.map((item, index) => (
+                  <div key={item.round}>
+                    {/* 10개 항목마다 광고 삽입 */}
+                    {index > 0 && index % 10 === 0 && (
+                      <AdBanner slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} style={{ margin: '10px 0' }} />
+                    )}
+                    <div className="history-item">
+                      <span className="col-round">{item.round}회</span>
+                      <div className="col-numbers">
+                        {item.numbers.map(num => (
+                          <LottoBall key={num} number={num} small />
+                        ))}
+                      </div>
+                      <span className="col-bonus">
+                        <LottoBall number={item.bonus} small />
+                      </span>
+                      <div className="col-stats">
+                        {item.stats ? (
+                          <>
+                            <span className="meta-badge">합 {item.stats.sum}</span>
+                            <span className="meta-badge">{item.stats.oddEven}</span>
+                            <span className="meta-badge highlight">AC {item.stats.ac}</span>
+                          </>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -919,6 +935,9 @@ export default function Home() {
                 )}
               </button>
 
+              {/* 광고 영역 (사이드바 하단) */}
+              <AdBanner slotId={ADSENSE_CONFIG.SLOTS.SIDEBAR_BOTTOM} format="autorelaxed" style={{ marginTop: '20px' }} />
+
               {/* 저장된 조합 */}
               {savedCombinations.length > 0 && (
                 <div className="card">
@@ -957,6 +976,9 @@ export default function Home() {
 
             {/* 결과 패널 */}
             <main className="results-panel">
+              {/* 광고 영역 (결과 패널 상단) */}
+              <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} />
+
               {result ? (
                 <>
                   {/* 통계 요약 */}
@@ -1001,32 +1023,38 @@ export default function Home() {
                           const saved = isSaved(combo);
                           
                           return (
-                            <div key={idx} className="result-item">
-                              <div className="result-rank">{idx + 1}</div>
-                              <div className="result-balls">
-                                {combo.map(num => (
-                                  <LottoBall key={num} number={num} />
-                                ))}
-                              </div>
-                              <div className="result-meta">
-                                <span className="meta-badge highlight">AC {ac}</span>
-                                <span className="meta-badge">홀 {oddEven.odd}:짝 {oddEven.even}</span>
-                              </div>
-                              <div className="result-actions">
-                                <button 
-                                  className={`action-btn ${saved ? 'saved' : ''}`}
-                                  onClick={() => handleSave(combo)}
-                                  title={saved ? '저장 취소' : '저장'}
-                                >
-                                  {saved ? <Icons.StarFilled /> : <Icons.Star />}
-                                </button>
-                                <button 
-                                  className="action-btn"
-                                  onClick={() => handleCopy(combo)}
-                                  title="복사"
-                                >
-                                  <Icons.Copy />
-                                </button>
+                            <div key={idx}>
+                              {/* 5번째 결과마다 광고 삽입 */}
+                              {idx > 0 && idx % 5 === 0 && (
+                                <AdBanner slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} style={{ margin: '10px 0' }} />
+                              )}
+                              <div className="result-item">
+                                <div className="result-rank">{idx + 1}</div>
+                                <div className="result-balls">
+                                  {combo.map(num => (
+                                    <LottoBall key={num} number={num} />
+                                  ))}
+                                </div>
+                                <div className="result-meta">
+                                  <span className="meta-badge highlight">AC {ac}</span>
+                                  <span className="meta-badge">홀 {oddEven.odd}:짝 {oddEven.even}</span>
+                                </div>
+                                <div className="result-actions">
+                                  <button 
+                                    className={`action-btn ${saved ? 'saved' : ''}`}
+                                    onClick={() => handleSave(combo)}
+                                    title={saved ? '저장 취소' : '저장'}
+                                  >
+                                    {saved ? <Icons.StarFilled /> : <Icons.Star />}
+                                  </button>
+                                  <button 
+                                    className="action-btn"
+                                    onClick={() => handleCopy(combo)}
+                                    title="복사"
+                                  >
+                                    <Icons.Copy />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );

@@ -1,4 +1,6 @@
 import './globals.css';
+import AdSense from './components/AdSense';
+import { ADSENSE_CONFIG } from './utils/ads';
 
 export const metadata = {
   title: 'FortunaPick | Premium Lotto Combination Engine',
@@ -18,6 +20,7 @@ export default function RootLayout({ children }) {
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <AdSense pId={ADSENSE_CONFIG.PUBLISHER_ID} />
       </head>
       <body>
         {children}
