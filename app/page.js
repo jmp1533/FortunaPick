@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AdBanner from './components/AdBanner';
-import { ADSENSE_CONFIG } from './utils/ads';
+// import AdBanner from './components/AdBanner'; // AdSense temporarily disabled
+// import { ADSENSE_CONFIG } from './utils/ads'; // AdSense temporarily disabled
 import { 
   FILTER_DEFINITIONS, 
   calculateAC, 
@@ -361,8 +361,8 @@ const AnalysisView = ({ historyData, loading, error }) => {
         </div>
       </div>
 
-      {/* 광고 영역 (상단) */}
-      <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} />
+      {/* 광고 영역 (상단) - Temporarily Disabled */}
+      {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} /> */}
 
       {/* 분석 탭 네비게이션 */}
       <div className="tabs">
@@ -418,10 +418,10 @@ const AnalysisView = ({ historyData, loading, error }) => {
             </div>
           </div>
           
-          {/* 광고 영역 (중간) */}
-          <div style={{ gridColumn: '1 / -1' }}>
+          {/* 광고 영역 (중간) - Temporarily Disabled */}
+          {/* <div style={{ gridColumn: '1 / -1' }}>
             <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_MIDDLE} />
-          </div>
+          </div> */}
         </div>
       )}
 
@@ -538,15 +538,15 @@ const AnalysisView = ({ historyData, loading, error }) => {
               {filteredHistory.length > 0 ? (
                 filteredHistory.map((item, index) => (
                   <div key={item.round}>
-                    {/* 10개 항목마다 광고 삽입 */}
-                    {index > 0 && index % 10 === 0 && (
+                    {/* 10개 항목마다 광고 삽입 - Temporarily Disabled */}
+                    {/* {index > 0 && index % 10 === 0 && (
                       <AdBanner 
                         slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} 
                         format="fluid"
                         layoutKey={ADSENSE_CONFIG.LAYOUT_KEYS.IN_FEED_LIST}
                         style={{ margin: '10px 0' }} 
                       />
-                    )}
+                    )} */}
                     <div className="history-item">
                       <span className="col-round">{item.round}회</span>
                       <div className="col-numbers">
@@ -940,12 +940,8 @@ export default function Home() {
                 )}
               </button>
 
-              {/* 광고 영역 (사이드바 하단) */}
-              <AdBanner 
-                slotId={ADSENSE_CONFIG.SLOTS.SIDEBAR_BOTTOM} 
-                format="autorelaxed" 
-                style={{ marginTop: '20px' }} 
-              />
+              {/* 광고 영역 (사이드바 하단) - Temporarily Disabled */}
+              {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.SIDEBAR_BOTTOM} format="autorelaxed" style={{ marginTop: '20px' }} /> */}
 
               {/* 저장된 조합 */}
               {savedCombinations.length > 0 && (
@@ -985,8 +981,8 @@ export default function Home() {
 
             {/* 결과 패널 */}
             <main className="results-panel">
-              {/* 광고 영역 (결과 패널 상단) */}
-              <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} />
+              {/* 광고 영역 (결과 패널 상단) - Temporarily Disabled */}
+              {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} /> */}
 
               {result ? (
                 <>
@@ -1033,15 +1029,15 @@ export default function Home() {
                           
                           return (
                             <div key={idx}>
-                              {/* 5번째 결과마다 광고 삽입 */}
-                              {idx > 0 && idx % 5 === 0 && (
+                              {/* 5번째 결과마다 광고 삽입 - Temporarily Disabled */}
+                              {/* {idx > 0 && idx % 5 === 0 && (
                                 <AdBanner 
                                   slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} 
                                   format="fluid"
                                   layoutKey={ADSENSE_CONFIG.LAYOUT_KEYS.IN_FEED_LIST}
                                   style={{ margin: '10px 0' }} 
                                 />
-                              )}
+                              )} */}
                               <div className="result-item">
                                 <div className="result-rank">{idx + 1}</div>
                                 <div className="result-balls">
