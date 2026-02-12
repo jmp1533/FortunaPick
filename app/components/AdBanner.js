@@ -6,6 +6,7 @@ export default function AdBanner({
   slotId, 
   format = "auto", 
   responsive = "true",
+  layoutKey = null, // 인피드 광고용 레이아웃 키 추가
   style = { display: 'block' },
   className = ""
 }) {
@@ -14,6 +15,7 @@ export default function AdBanner({
   useEffect(() => {
     try {
       const adsbygoogle = window.adsbygoogle || [];
+      // 광고가 이미 로드되었는지 확인하여 중복 푸시 방지
       if (adRef.current && adRef.current.innerHTML === "") {
           adsbygoogle.push({});
       }
@@ -22,7 +24,7 @@ export default function AdBanner({
     }
   }, []);
 
-  if (!slotId || !ADSENSE_CONFIG.PUBLISHER_ID || ADSENSE_CONFIG.PUBLISHER_ID === "ca-pub-XXXXXXXXXXXXXXXX") {
+  if (!slotId || !ADSENSE_CONFIG.PUBLISHER_ID) {
     return null; 
   }
 
@@ -36,8 +38,8 @@ export default function AdBanner({
         data-ad-slot={slotId}
         data-ad-format={format}
         data-full-width-responsive={responsive}
+        {...(layoutKey && { "data-ad-layout-key": layoutKey })} // layoutKey가 있을 때만 속성 추가
       />
-      <span style={{ fontSize: '10px', color: '#ccc', display: 'block', marginTop: '4px' }}>Advertisement</span>
     </div>
   );
 }

@@ -3,12 +3,11 @@ import { useEffect } from 'react';
 
 export default function AdSense({ pId }) {
   useEffect(() => {
-    try {
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch (err) {
-      console.error('AdSense error:', err);
-    }
+    // This component is only for loading the script.
+    // The actual ad push happens in AdBanner components.
   }, []);
+
+  if (!pId) return null;
 
   return (
     <script

@@ -540,7 +540,12 @@ const AnalysisView = ({ historyData, loading, error }) => {
                   <div key={item.round}>
                     {/* 10개 항목마다 광고 삽입 */}
                     {index > 0 && index % 10 === 0 && (
-                      <AdBanner slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} style={{ margin: '10px 0' }} />
+                      <AdBanner 
+                        slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} 
+                        format="fluid"
+                        layoutKey={ADSENSE_CONFIG.LAYOUT_KEYS.IN_FEED_LIST}
+                        style={{ margin: '10px 0' }} 
+                      />
                     )}
                     <div className="history-item">
                       <span className="col-round">{item.round}회</span>
@@ -936,7 +941,11 @@ export default function Home() {
               </button>
 
               {/* 광고 영역 (사이드바 하단) */}
-              <AdBanner slotId={ADSENSE_CONFIG.SLOTS.SIDEBAR_BOTTOM} format="autorelaxed" style={{ marginTop: '20px' }} />
+              <AdBanner 
+                slotId={ADSENSE_CONFIG.SLOTS.SIDEBAR_BOTTOM} 
+                format="autorelaxed" 
+                style={{ marginTop: '20px' }} 
+              />
 
               {/* 저장된 조합 */}
               {savedCombinations.length > 0 && (
@@ -1026,7 +1035,12 @@ export default function Home() {
                             <div key={idx}>
                               {/* 5번째 결과마다 광고 삽입 */}
                               {idx > 0 && idx % 5 === 0 && (
-                                <AdBanner slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} style={{ margin: '10px 0' }} />
+                                <AdBanner 
+                                  slotId={ADSENSE_CONFIG.SLOTS.IN_FEED_LIST} 
+                                  format="fluid"
+                                  layoutKey={ADSENSE_CONFIG.LAYOUT_KEYS.IN_FEED_LIST}
+                                  style={{ margin: '10px 0' }} 
+                                />
                               )}
                               <div className="result-item">
                                 <div className="result-rank">{idx + 1}</div>
