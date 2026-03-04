@@ -142,18 +142,20 @@ def score_combination(combo):
     
     # AC 값 점수 (7-10이 이상적)
     ac = calculate_ac(combo)
-    if 7 <= ac <= 10:
+    if 8 <= ac <= 10:        # 최근 200회 기준 70.0% 집중 구간
         score += 30
-    elif 6 <= ac <= 11:
-        score += 20
+    elif ac == 7:            # 13.0% 구간
+        score += 25
+    elif ac == 6:            # 10.5% 구간
+        score += 15
     else:
-        score += 10
+        score += 5
     
     # 홀짝 비율 점수 (3:3 또는 2:4, 4:2가 이상적)
     odd_count = get_odd_count(combo)
-    if odd_count in [3]:
+    if odd_count in [3, 4]:
         score += 25
-    elif odd_count in [2, 4]:
+    elif odd_count in [2]:
         score += 20
     else:
         score += 5
@@ -167,9 +169,9 @@ def score_combination(combo):
     
     # 합계 점수 (115-185가 통계적으로 좋음)
     total = get_sum(combo)
-    if 121 <= total <= 180:
+    if 110 <= total <= 170:
         score += 25
-    elif 100 <= total <= 200:
+    elif 100 <= total <= 180:
         score += 15
     else:
         score += 5
