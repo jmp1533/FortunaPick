@@ -3,12 +3,22 @@ FortunaPick API - Premium Lotto Combination Engine
 Vercel Serverless Function (Python)
 """
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from http.server import BaseHTTPRequestHandler
 import json
 import itertools
 from collections import Counter
 import random
+from lottery.analyzer import LotteryAnalyzer
 
+# Initialize analyzer once (or handle per request)
+# Given Vercel environment, we'll re-init or cache based on necessity.
+# Simple instantiation for now as it's a small dataset.
+def get_analyzer():
+    return LotteryAnalyzer()
 
 def calculate_ac(numbers):
     """
@@ -133,13 +143,17 @@ def check_filters(combo, rules):
     return True
 
 
-def score_combination(combo):
+def score_combination(combo, overdue_numbers):
     """
     조합의 품질 점수 계산 (높을수록 좋음)
     다양한 통계적 특성을 고려하여 점수 부여
     """
     score = 0
     
+    # [Overdue Number Bonus] 25회 이상 미출현 번호에 가점
+    overdue_count = sum(1 for n in combo if n in overdue_numbers)
+    score += (overdue_count * 15) # 가점폭 조정 가능
+
     # AC 값 점수 (7-10이 이상적)
     ac = calculate_ac(combo)
     if 8 <= ac <= 10:        # 최근 200회 기준 70.0% 집중 구간
@@ -195,7 +209,7 @@ def score_combination(combo):
     return score
 
 
-def recommend_combinations(valid_combos, count=10):
+def recommend_combinations(valid_combos, count=10, overdue_numbers=set()):
     """
     유효한 조합 중에서 최적의 조합을 추천
     """
@@ -203,7 +217,7 @@ def recommend_combinations(valid_combos, count=10):
         return valid_combos
     
     # 모든 조합에 점수 부여
-    scored = [(combo, score_combination(combo)) for combo in valid_combos]
+    scored = [(combo, score_combination(combo, overdue_numbers)) for combo in valid_combos]
     
     # 점수순 정렬
     scored.sort(key=lambda x: x[1], reverse=True)
@@ -229,7 +243,7 @@ def recommend_combinations(valid_combos, count=10):
     result = [combo for combo, _ in primary_picks + secondary_picks]
     
     # 최종 결과를 점수순으로 정렬
-    result.sort(key=lambda c: score_combination(c), reverse=True)
+    result.sort(key=lambda c: score_combination(c, overdue_numbers), reverse=True)
     
     return result[:count]
 
@@ -287,6 +301,11 @@ class handler(BaseHTTPRequestHandler):
                 'filters': filters
             }
             
+            # 분석기 초기화 및 미출현 번호(25회 이상) 추출
+            analyzer = get_analyzer()
+            last_seen = analyzer.get_analysis_results().get('last_seen_draws_ago', {})
+            overdue_numbers = {n for n, seen in last_seen.items() if seen >= 25 or seen == -1}
+            
             # 유효한 조합 생성
             valid_combos = []
             
@@ -295,8 +314,8 @@ class handler(BaseHTTPRequestHandler):
                 if check_filters(combo, rules):
                     valid_combos.append(combo)
             
-            # 추천 조합 선택
-            recommendations = recommend_combinations(valid_combos, count=10)
+            # 추천 조합 선택 (미출현 번호 세트 전달)
+            recommendations = recommend_combinations(valid_combos, count=10, overdue_numbers=overdue_numbers)
             
             # 응답 생성
             response = {
@@ -306,6 +325,7 @@ class handler(BaseHTTPRequestHandler):
                     'fixed_count': len(fixed_nums),
                     'excluded_count': len(exclude_nums),
                     'pool_size': len(pool),
+                    'overdue_count': len(overdue_numbers), # 추가: 미출현 번호 개수
                     'filtered_ratio': f"{(1 - len(valid_combos) / max(1, len(list(itertools.combinations(pool, needed))))) * 100:.1f}%"
                 }
             }
