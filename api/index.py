@@ -5,6 +5,7 @@ Vercel Serverless Function (Python)
 
 import sys
 import os
+import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from http.server import BaseHTTPRequestHandler
@@ -309,10 +310,24 @@ class handler(BaseHTTPRequestHandler):
             # 유효한 조합 생성
             valid_combos = []
             
-            for additional in itertools.combinations(pool, needed):
-                combo = tuple(sorted(list(fixed_nums) + list(additional)))
-                if check_filters(combo, rules):
-                    valid_combos.append(combo)
+            # [최적화] 조합 개수가 너무 많으면 랜덤 샘플링 사용
+            max_iterations = 50000 
+            total_possible = math.comb(len(pool), needed)
+            
+            if total_possible > max_iterations:
+                # 랜덤 샘플링 방식
+                for _ in range(max_iterations):
+                    additional = tuple(sorted(random.sample(pool, needed)))
+                    combo = tuple(sorted(list(fixed_nums) + list(additional)))
+                    if check_filters(combo, rules) and combo not in valid_combos:
+                        valid_combos.append(combo)
+                        if len(valid_combos) >= 500: break
+            else:
+                # 조합이 적으면 완전 탐색 수행
+                for additional in itertools.combinations(pool, needed):
+                    combo = tuple(sorted(list(fixed_nums) + list(additional)))
+                    if check_filters(combo, rules):
+                        valid_combos.append(combo)
             
             # 추천 조합 선택 (미출현 번호 세트 전달)
             recommendations = recommend_combinations(valid_combos, count=10, overdue_numbers=overdue_numbers)
@@ -326,7 +341,8 @@ class handler(BaseHTTPRequestHandler):
                     'excluded_count': len(exclude_nums),
                     'pool_size': len(pool),
                     'overdue_count': len(overdue_numbers), # 추가: 미출현 번호 개수
-                    'filtered_ratio': f"{(1 - len(valid_combos) / max(1, len(list(itertools.combinations(pool, needed))))) * 100:.1f}%"
+                    'filtered_ratio': f"{(1 - len(valid_combos) / max(1, len(list(itertools.combinations(pool, needed))))) * 100:.1f}%",
+                    'method': 'random_sampling' if total_possible > max_iterations else 'exhaustive'
                 }
             }
             

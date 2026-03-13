@@ -4,8 +4,9 @@ import os
 from collections import Counter
 
 class LotteryAnalyzer:
-    def __init__(self, excel_path='lottery/winningNumbers.xlsx'):
-        self.excel_path = os.path.join(os.path.dirname(__file__), excel_path)
+    def __init__(self, excel_filename='winningNumbers.xlsx'):
+        # analyzer.py와 같은 폴더에 있는 winningNumbers.xlsx를 정확히 참조
+        self.excel_path = os.path.join(os.path.dirname(__file__), excel_filename)
         self.df = self._load_data()
         self.analysis_results = {}
         if not self.df.empty:
@@ -13,13 +14,15 @@ class LotteryAnalyzer:
 
     def _load_data(self):
         try:
-            # Adjust path for Vercel environment
-            if os.path.exists('/var/task/lottery/winningNumbers.xlsx'):
-                current_excel_path = '/var/task/lottery/winningNumbers.xlsx'
-            else:
-                current_excel_path = self.excel_path
-
-            df = pd.read_excel(current_excel_path, engine='openpyxl')
+            # Vercel 환경에서는 파일 시스템 구조가 다를 수 있음. 
+            # 하지만 __file__ 기반 경로가 가장 안전함.
+            if not os.path.exists(self.excel_path):
+                # fallback for some environments
+                potential_path = os.path.join('/var/task/lottery', 'winningNumbers.xlsx')
+                if os.path.exists(potential_path):
+                    self.excel_path = potential_path
+            
+            df = pd.read_excel(self.excel_path, engine='openpyxl')
             
             # Filter out rows with missing or invalid '회차' (Round) or numbers
             df['회차'] = pd.to_numeric(df['회차'].astype(str).str.replace(',', '').str.replace('회', '').str.strip(), errors='coerce')
@@ -151,23 +154,3 @@ class LotteryAnalyzer:
         if self.df.empty:
             return []
         return self.df.head(count)[['회차', 'winning_numbers', 'bonus_number']].to_dict(orient='records')
-
-# Example usage (for testing purposes, remove in production)
-if __name__ == '__main__':
-    analyzer = LotteryAnalyzer()
-    if not analyzer.df.empty:
-        results = analyzer.get_analysis_results()
-        for key, value in results.items():
-            print(f"--- {key.replace('_', ' ').title()} ---")
-            if isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    print(f"  {sub_key}: {sub_value}")
-            else:
-                print(value)
-        
-        print("
---- Latest 5 Draws ---")
-        for draw in analyzer.get_latest_draws(5):
-            print(draw)
-    else:
-        print("Failed to load lottery data. No analysis performed.")
