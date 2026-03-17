@@ -1,1 +1,5 @@
 /.idea/
+__pycache__/
+*.pyc
+lottery/.cache/
+lottery/backtest_report.json
