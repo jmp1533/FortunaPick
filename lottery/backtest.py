@@ -7,7 +7,8 @@ import os
 import statistics
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
+from typing import Dict, List, Optional
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '..'))
@@ -15,7 +16,12 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from lottery.analyzer import LotteryAnalyzer
-from lottery.engine import build_or_load_repository, recommend_from_repository, normalize_rules, cache_key_for_rules
+from lottery.engine import build_or_load_repository, recommend_from_repository, normalize_rules, cache_key_for_rules, normalize_score_config
+
+MILESTONE_KEYS = [
+    'had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6',
+    'had_3_plus_bonus', 'had_4_plus_bonus', 'had_5_plus_bonus', 'had_bonus_match'
+]
 
 
 def top_frequency_baseline(draws, recommend_count=10):
@@ -43,24 +49,66 @@ def top_frequency_baseline(draws, recommend_count=10):
     return combos
 
 
-def build_last_seen(draws):
-    last_seen = {num: -1 for num in range(1, 46)}
-    for idx, draw in enumerate(draws):
+class SlidingWindowStats:
+    def __init__(self, window_draws=None, window_size=30):
+        self.window_size = max(1, int(window_size))
+        self.draws = deque(maxlen=self.window_size)
+        self.counts = Counter()
+        self.last_seen = {num: -1 for num in range(1, 46)}
+        if window_draws:
+            for draw in window_draws:
+                self.append(draw)
+
+    def append(self, draw):
+        if len(self.draws) == self.window_size:
+            oldest = self.draws.popleft()
+            for num in oldest['winning_numbers']:
+                self.counts[num] -= 1
+                if self.counts[num] <= 0:
+                    del self.counts[num]
+
+        self.draws.append(draw)
         for num in draw['winning_numbers']:
-            if last_seen[num] == -1:
-                last_seen[num] = idx
-    return last_seen
+            self.counts[num] += 1
+        self._rebuild_last_seen()
 
+    def _rebuild_last_seen(self):
+        self.last_seen = {num: -1 for num in range(1, 46)}
+        reversed_draws = list(reversed(self.draws))
+        for idx, draw in enumerate(reversed_draws):
+            for num in draw['winning_numbers']:
+                if self.last_seen[num] == -1:
+                    self.last_seen[num] = idx
 
-def overdue_numbers_from_draws(draws, threshold=25):
-    last_seen = build_last_seen(draws)
-    return {num for num, seen in last_seen.items() if seen >= threshold or seen == -1}
+    def overdue_numbers(self, threshold=25):
+        return {num for num, seen in self.last_seen.items() if seen >= threshold or seen == -1}
+
+    def baseline_recommendations(self, recommend_count=10):
+        ranked = sorted(self.counts.items(), key=lambda item: (-item[1], item[0]))
+        ordered_numbers = [num for num, _ in ranked]
+        pool = ordered_numbers[:12] if len(ordered_numbers) >= 12 else ordered_numbers[:]
+
+        if len(pool) < 6:
+            for num in range(1, 46):
+                if num not in pool:
+                    pool.append(num)
+                if len(pool) == 6:
+                    break
+
+        combos = []
+        for combo in itertools.combinations(pool, 6):
+            combos.append(tuple(sorted(combo)))
+            if len(combos) >= recommend_count:
+                break
+        return combos
+
+    def snapshot_draws(self):
+        return list(self.draws)
 
 
 def evaluate_round(recommendations, target_numbers, bonus_number=None):
     hit_counts = []
     full_target = set(target_numbers)
-    bonus_hit_counts = []
     detailed_results = []
 
     for combo in recommendations:
@@ -68,7 +116,6 @@ def evaluate_round(recommendations, target_numbers, bonus_number=None):
         main_hits = len(combo_set & full_target)
         bonus_hit = bonus_number in combo_set if bonus_number is not None else False
         hit_counts.append(main_hits)
-        bonus_hit_counts.append(1 if bonus_hit else 0)
         detailed_results.append({
             'combo': list(combo),
             'main_hits': main_hits,
@@ -142,25 +189,50 @@ def summarize_backtest_run(summaries, aggregate_hits, aggregate_bonus_hits, base
     }
 
 
-def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, seed_base=1000, force_rebuild=False, include_filter_impact=False):
+def update_aggregates(evaluation, aggregate_hits, aggregate_bonus_hits, milestone_counts):
+    aggregate_hits.update(evaluation['distribution'])
+    aggregate_bonus_hits.update(evaluation['bonus_distribution'])
+    for key in MILESTONE_KEYS:
+        if evaluation[key]:
+            milestone_counts[key] += 1
+
+
+def load_checkpoint(path: Optional[str]):
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as fh:
+        payload = json.load(fh)
+
+    def _normalize_counter_map(mapping):
+        normalized = {}
+        for key, value in mapping.items():
+            try:
+                normalized[int(key)] = value
+            except (ValueError, TypeError):
+                normalized[str(key)] = value
+        return normalized
+
+    for field in ['aggregate_hits', 'baseline_aggregate_hits']:
+        if field in payload:
+            payload[field] = _normalize_counter_map(payload[field])
+    for field in ['aggregate_bonus_hits', 'baseline_aggregate_bonus_hits']:
+        if field in payload:
+            payload[field] = {str(k): v for k, v in payload[field].items()}
+    return payload
+
+
+def save_checkpoint(path: Optional[str], payload: Dict):
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+
+def execute_backtest_pass(repository, chronological, targets, recommend_count, seed_base, recent_window, checkpoint_path=None, variant_label='main'):
     started = time.time()
-    rules = normalize_rules(min_ac=min_ac, filters=filters)
-    repository = build_or_load_repository(rules, force_rebuild=force_rebuild)
-
-    analyzer = LotteryAnalyzer()
-    if analyzer.df.empty:
-        raise RuntimeError('No lottery data available for backtest.')
-
-    records = analyzer.get_latest_draws(count=len(analyzer.df))
-    chronological = list(reversed(records))
-
-    if len(chronological) < 2:
-        raise RuntimeError('Not enough history for backtest.')
-
-    available_tests = len(chronological) - 1
-    test_rounds = min(test_rounds, available_tests)
-    targets = chronological[-test_rounds:]
-
     summaries = []
     aggregate_hits = Counter()
     aggregate_bonus_hits = Counter()
@@ -169,30 +241,43 @@ def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, see
     milestone_counts = defaultdict(int)
     baseline_milestone_counts = defaultdict(int)
 
-    for idx, target in enumerate(targets, start=1):
-        history_before_target = chronological[:len(chronological) - test_rounds + idx - 1]
-        overdue_numbers = overdue_numbers_from_draws(list(reversed(history_before_target)), threshold=25)
+    checkpoint = load_checkpoint(checkpoint_path)
+    start_index = 0
+    if checkpoint and checkpoint.get('variant_label') == variant_label and checkpoint.get('recent_window') == recent_window:
+        start_index = checkpoint.get('next_index', 0)
+        summaries = checkpoint.get('summaries', [])
+        aggregate_hits.update(checkpoint.get('aggregate_hits', {}))
+        aggregate_bonus_hits.update(checkpoint.get('aggregate_bonus_hits', {}))
+        baseline_aggregate_hits.update(checkpoint.get('baseline_aggregate_hits', {}))
+        baseline_aggregate_bonus_hits.update(checkpoint.get('baseline_aggregate_bonus_hits', {}))
+        milestone_counts.update(checkpoint.get('milestone_counts', {}))
+        baseline_milestone_counts.update(checkpoint.get('baseline_milestone_counts', {}))
+
+    target_start = len(chronological) - len(targets)
+    if start_index > len(targets):
+        start_index = 0
+
+    initial_history_end = target_start + start_index
+    initial_window_start = max(0, initial_history_end - recent_window)
+    initial_window_draws = chronological[initial_window_start:initial_history_end]
+    window_stats = SlidingWindowStats(initial_window_draws, window_size=recent_window)
+
+    for relative_idx in range(start_index, len(targets)):
+        target = targets[relative_idx]
+        overdue_numbers = window_stats.overdue_numbers(threshold=25)
         recommendations = recommend_from_repository(
             repository,
             overdue_numbers=overdue_numbers,
             count=recommend_count,
             seed=seed_base + target['회차'],
         )
-        baseline_recommendations = top_frequency_baseline(history_before_target, recommend_count=recommend_count)
+        baseline_recommendations = window_stats.baseline_recommendations(recommend_count=recommend_count)
 
         evaluation = evaluate_round(recommendations, target['winning_numbers'], target['bonus_number'])
         baseline_evaluation = evaluate_round(baseline_recommendations, target['winning_numbers'], target['bonus_number'])
 
-        aggregate_hits.update(evaluation['distribution'])
-        aggregate_bonus_hits.update(evaluation['bonus_distribution'])
-        baseline_aggregate_hits.update(baseline_evaluation['distribution'])
-        baseline_aggregate_bonus_hits.update(baseline_evaluation['bonus_distribution'])
-
-        for key in ['had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6', 'had_3_plus_bonus', 'had_4_plus_bonus', 'had_5_plus_bonus', 'had_bonus_match']:
-            if evaluation[key]:
-                milestone_counts[key] += 1
-            if baseline_evaluation[key]:
-                baseline_milestone_counts[key] += 1
+        update_aggregates(evaluation, aggregate_hits, aggregate_bonus_hits, milestone_counts)
+        update_aggregates(baseline_evaluation, baseline_aggregate_hits, baseline_aggregate_bonus_hits, baseline_milestone_counts)
 
         summaries.append({
             'round': int(target['회차']),
@@ -204,19 +289,24 @@ def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, see
             'baseline': baseline_evaluation,
         })
 
-    result = {
-        'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-        'rules': rules,
-        'repository': {
-            'total_valid_combinations': repository.total_valid,
-            'cacheKey': cache_key_for_rules(rules)
-        },
-        'settings': {
-            'test_rounds': test_rounds,
-            'recommend_count': recommend_count,
-            'seed_base': seed_base,
-            'include_filter_impact': include_filter_impact,
-        },
+        save_checkpoint(checkpoint_path, {
+            'variant_label': variant_label,
+            'recent_window': recent_window,
+            'next_index': relative_idx + 1,
+            'summaries': summaries,
+            'aggregate_hits': dict(aggregate_hits),
+            'aggregate_bonus_hits': dict(aggregate_bonus_hits),
+            'baseline_aggregate_hits': dict(baseline_aggregate_hits),
+            'baseline_aggregate_bonus_hits': dict(baseline_aggregate_bonus_hits),
+            'milestone_counts': dict(milestone_counts),
+            'baseline_milestone_counts': dict(baseline_milestone_counts),
+        })
+
+        if target_start + relative_idx < len(chronological):
+            window_stats.append(chronological[target_start + relative_idx])
+
+    return {
+        'summaries': summaries,
         'summary': summarize_backtest_run(
             summaries,
             aggregate_hits,
@@ -226,108 +316,150 @@ def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, see
             milestone_counts,
             baseline_milestone_counts,
             started,
-        ),
-        'rounds': summaries,
+        )
     }
 
-    if include_filter_impact:
-        filter_impact = {}
-        base_filters = rules['filters'].copy()
-        for filter_key, enabled in base_filters.items():
-            if not enabled:
-                continue
 
-            test_filters = base_filters.copy()
-            test_filters[filter_key] = False
-            variant_rules = normalize_rules(min_ac=min_ac, filters=test_filters)
-            variant_repository = build_or_load_repository(variant_rules, force_rebuild=force_rebuild)
+def run_filter_impact(rules, chronological, targets, recommend_count, seed_base, recent_window, force_rebuild=False, checkpoint_dir=None):
+    filter_impact = {}
+    base_filters = rules['filters'].copy()
+    for filter_key, enabled in base_filters.items():
+        if not enabled:
+            continue
+        test_filters = base_filters.copy()
+        test_filters[filter_key] = False
+        variant_rules = normalize_rules(min_ac=rules['min_ac'], filters=test_filters)
+        variant_repository = build_or_load_repository(variant_rules, force_rebuild=force_rebuild)
+        checkpoint_path = None
+        if checkpoint_dir:
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(checkpoint_dir, f'filter-impact-{filter_key}.json')
+        variant_result = execute_backtest_pass(
+            variant_repository,
+            chronological,
+            targets,
+            recommend_count,
+            seed_base,
+            recent_window,
+            checkpoint_path=checkpoint_path,
+            variant_label=f'filter-impact-{filter_key}',
+        )
+        filter_impact[filter_key] = {
+            'disabled': True,
+            'summary': variant_result['summary'],
+        }
+    return filter_impact
 
-            variant_summaries = []
-            variant_aggregate_hits = Counter()
-            variant_aggregate_bonus_hits = Counter()
-            variant_baseline_aggregate_hits = Counter()
-            variant_baseline_aggregate_bonus_hits = Counter()
-            variant_milestone_counts = defaultdict(int)
-            variant_baseline_milestone_counts = defaultdict(int)
-            variant_started = time.time()
 
-            for idx, target in enumerate(targets, start=1):
-                history_before_target = chronological[:len(chronological) - test_rounds + idx - 1]
-                overdue_numbers = overdue_numbers_from_draws(list(reversed(history_before_target)), threshold=25)
-                variant_recommendations = recommend_from_repository(
-                    variant_repository,
-                    overdue_numbers=overdue_numbers,
-                    count=recommend_count,
-                    seed=seed_base + target['회차'],
-                )
-                baseline_recommendations = top_frequency_baseline(history_before_target, recommend_count=recommend_count)
+def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, seed_base=1000, force_rebuild=False, include_filter_impact=False, recent_window=30, checkpoint_dir=None, mode='full', score_config=None):
+    started = time.time()
+    rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
+    repository = build_or_load_repository(rules, force_rebuild=force_rebuild)
 
-                variant_evaluation = evaluate_round(variant_recommendations, target['winning_numbers'], target['bonus_number'])
-                baseline_evaluation = evaluate_round(baseline_recommendations, target['winning_numbers'], target['bonus_number'])
+    analyzer = LotteryAnalyzer()
+    if analyzer.df.empty:
+        raise RuntimeError('No lottery data available for backtest.')
 
-                variant_aggregate_hits.update(variant_evaluation['distribution'])
-                variant_aggregate_bonus_hits.update(variant_evaluation['bonus_distribution'])
-                variant_baseline_aggregate_hits.update(baseline_evaluation['distribution'])
-                variant_baseline_aggregate_bonus_hits.update(baseline_evaluation['bonus_distribution'])
+    records = analyzer.get_latest_draws(count=len(analyzer.df))
+    chronological = list(reversed(records))
+    if len(chronological) < 2:
+        raise RuntimeError('Not enough history for backtest.')
 
-                for key in ['had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6', 'had_3_plus_bonus', 'had_4_plus_bonus', 'had_5_plus_bonus', 'had_bonus_match']:
-                    if variant_evaluation[key]:
-                        variant_milestone_counts[key] += 1
-                    if baseline_evaluation[key]:
-                        variant_baseline_milestone_counts[key] += 1
+    available_tests = len(chronological) - 1
+    test_rounds = min(test_rounds, available_tests)
+    targets = chronological[-test_rounds:]
 
-                variant_summaries.append({
-                    'round': int(target['회차']),
-                    'best_hit': variant_evaluation['best_hit'],
-                    'baseline': baseline_evaluation,
-                })
+    result = {
+        'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'rules': rules,
+        'score_config': rules.get('score_config'),
+        'repository': {
+            'total_valid_combinations': repository.total_valid,
+            'cacheKey': cache_key_for_rules(rules)
+        },
+        'settings': {
+            'test_rounds': test_rounds,
+            'recommend_count': recommend_count,
+            'seed_base': seed_base,
+            'include_filter_impact': include_filter_impact,
+            'recent_window': recent_window,
+            'checkpoint_dir': checkpoint_dir,
+            'mode': mode,
+        },
+    }
 
-            variant_summary = summarize_backtest_run(
-                variant_summaries,
-                variant_aggregate_hits,
-                variant_aggregate_bonus_hits,
-                variant_baseline_aggregate_hits,
-                variant_baseline_aggregate_bonus_hits,
-                variant_milestone_counts,
-                variant_baseline_milestone_counts,
-                variant_started,
-            )
+    main_result = None
+    if mode in ('full', 'main-only', 'filter-impact-only'):
+        main_checkpoint = os.path.join(checkpoint_dir, 'main.json') if checkpoint_dir else None
+        main_result = execute_backtest_pass(
+            repository,
+            chronological,
+            targets,
+            recommend_count,
+            seed_base,
+            recent_window,
+            checkpoint_path=main_checkpoint,
+            variant_label='main',
+        )
+        result['summary'] = main_result['summary']
+        result['rounds'] = main_result['summaries']
 
-            filter_impact[filter_key] = {
-                'disabled': True,
-                'summary': variant_summary,
-                'delta_vs_current': {
-                    'average_best_hit_delta': round(variant_summary['average_best_hit'] - result['summary']['average_best_hit'], 4),
-                    'rounds_with_3_plus_delta': variant_summary['rounds_with_3_plus'] - result['summary']['rounds_with_3_plus'],
-                    'rounds_with_4_plus_delta': variant_summary['rounds_with_4_plus'] - result['summary']['rounds_with_4_plus'],
-                    'rounds_with_5_plus_delta': variant_summary['rounds_with_5_plus'] - result['summary']['rounds_with_5_plus'],
-                    'rounds_with_bonus_match_delta': variant_summary['rounds_with_bonus_match'] - result['summary']['rounds_with_bonus_match'],
+    if include_filter_impact and mode in ('full', 'filter-impact-only'):
+        filter_impact = run_filter_impact(
+            rules,
+            chronological,
+            targets,
+            recommend_count,
+            seed_base,
+            recent_window,
+            force_rebuild=force_rebuild,
+            checkpoint_dir=checkpoint_dir,
+        )
+        if main_result is not None:
+            for filter_key, payload in filter_impact.items():
+                payload['delta_vs_current'] = {
+                    'average_best_hit_delta': round(payload['summary']['average_best_hit'] - result['summary']['average_best_hit'], 4),
+                    'rounds_with_3_plus_delta': payload['summary']['rounds_with_3_plus'] - result['summary']['rounds_with_3_plus'],
+                    'rounds_with_4_plus_delta': payload['summary']['rounds_with_4_plus'] - result['summary']['rounds_with_4_plus'],
+                    'rounds_with_5_plus_delta': payload['summary']['rounds_with_5_plus'] - result['summary']['rounds_with_5_plus'],
+                    'rounds_with_bonus_match_delta': payload['summary']['rounds_with_bonus_match'] - result['summary']['rounds_with_bonus_match'],
                 }
-            }
-
         result['filter_impact'] = filter_impact
 
+    result['total_elapsed_seconds'] = round(time.time() - started, 2)
     return result
 
 
 def main():
     parser = argparse.ArgumentParser(description='Run FortunaPick backtests against historical draws.')
     parser.add_argument('--rounds', type=int, default=30, help='How many most recent rounds to backtest.')
+    parser.add_argument('--recent-window', type=int, default=30, help='How many prior draws to use per target round.')
     parser.add_argument('--min-ac', type=int, default=5, help='Minimum AC threshold.')
     parser.add_argument('--recommend-count', type=int, default=10, help='Recommendations per round.')
     parser.add_argument('--seed-base', type=int, default=1000, help='Base seed for deterministic shuffling.')
     parser.add_argument('--force-rebuild', action='store_true', help='Rebuild the valid combination cache.')
     parser.add_argument('--include-filter-impact', action='store_true', help='Run per-filter impact comparisons by disabling filters one at a time.')
+    parser.add_argument('--mode', choices=['full', 'main-only', 'filter-impact-only'], default='full', help='Run main backtest only, filter impact only, or both.')
+    parser.add_argument('--checkpoint-dir', default=os.path.join(CURRENT_DIR, '.backtest-checkpoints'), help='Directory for resumable checkpoint files.')
+    parser.add_argument('--score-config-json', default=None, help='Inline JSON string for score_config overrides.')
     parser.add_argument('--output', default=os.path.join(CURRENT_DIR, 'backtest_report.json'), help='Output JSON path.')
     args = parser.parse_args()
 
+    score_config = None
+    if args.score_config_json:
+        score_config = normalize_score_config(json.loads(args.score_config_json))
+
     result = run_backtest(
         test_rounds=args.rounds,
+        recent_window=args.recent_window,
         min_ac=args.min_ac,
         recommend_count=args.recommend_count,
         seed_base=args.seed_base,
         force_rebuild=args.force_rebuild,
         include_filter_impact=args.include_filter_impact,
+        checkpoint_dir=args.checkpoint_dir,
+        mode=args.mode,
+        score_config=score_config,
     )
 
     with open(args.output, 'w', encoding='utf-8') as fh:

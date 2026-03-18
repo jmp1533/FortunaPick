@@ -11,6 +11,7 @@ import math
 import os
 import pickle
 import random
+import json
 from array import array
 from collections import Counter
 from dataclasses import dataclass
@@ -25,6 +26,38 @@ DEFAULT_FILTERS = {
     'f6': True,
     'f7': True,
     'f8': True,
+}
+
+DEFAULT_SCORE_CONFIG = {
+    'overdue_weight': 15,
+    'ac_ranges': [
+        {'min': 8, 'max': 10, 'score': 30},
+        {'min': 7, 'max': 7, 'score': 25},
+        {'min': 6, 'max': 6, 'score': 15},
+    ],
+    'ac_default_score': 5,
+    'odd_count_scores': {
+        3: 25,
+        4: 25,
+        2: 20,
+    },
+    'odd_default_score': 5,
+    'high_count_scores': {
+        2: 20,
+        3: 20,
+        4: 20,
+    },
+    'high_default_score': 5,
+    'sum_ranges': [
+        {'min': 110, 'max': 170, 'score': 25},
+        {'min': 100, 'max': 180, 'score': 15},
+    ],
+    'sum_default_score': 5,
+    'max_concentration_scores': {
+        2: 20,
+        3: 10,
+    },
+    'concentration_default_score': 0,
 }
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), '.cache')
@@ -49,12 +82,44 @@ def normalize_filters(filters: Dict | None) -> Dict[str, bool]:
     return merged
 
 
-def normalize_rules(min_ac: int = 5, filters: Dict | None = None) -> Dict:
+def normalize_score_config(score_config: Dict | None = None) -> Dict:
+    merged = {
+        'overdue_weight': DEFAULT_SCORE_CONFIG['overdue_weight'],
+        'ac_ranges': [dict(item) for item in DEFAULT_SCORE_CONFIG['ac_ranges']],
+        'ac_default_score': DEFAULT_SCORE_CONFIG['ac_default_score'],
+        'odd_count_scores': dict(DEFAULT_SCORE_CONFIG['odd_count_scores']),
+        'odd_default_score': DEFAULT_SCORE_CONFIG['odd_default_score'],
+        'high_count_scores': dict(DEFAULT_SCORE_CONFIG['high_count_scores']),
+        'high_default_score': DEFAULT_SCORE_CONFIG['high_default_score'],
+        'sum_ranges': [dict(item) for item in DEFAULT_SCORE_CONFIG['sum_ranges']],
+        'sum_default_score': DEFAULT_SCORE_CONFIG['sum_default_score'],
+        'max_concentration_scores': dict(DEFAULT_SCORE_CONFIG['max_concentration_scores']),
+        'concentration_default_score': DEFAULT_SCORE_CONFIG['concentration_default_score'],
+    }
+    if not score_config:
+        return merged
+
+    for key, value in score_config.items():
+        if key in ['odd_count_scores', 'high_count_scores', 'max_concentration_scores']:
+            merged[key] = {int(k): int(v) for k, v in value.items()}
+        elif key in ['ac_ranges', 'sum_ranges']:
+            merged[key] = [dict(item) for item in value]
+        else:
+            merged[key] = value
+    return merged
+
+
+def normalize_rules(min_ac: int = 5, filters: Dict | None = None, score_config: Dict | None = None) -> Dict:
     min_ac = max(0, min(10, int(min_ac)))
     return {
         'min_ac': min_ac,
         'filters': normalize_filters(filters),
+        'score_config': normalize_score_config(score_config),
     }
+
+
+def json_signature(value) -> str:
+    return json.dumps(value, sort_keys=True, separators=(',', ':'))
 
 
 def combo_to_mask(numbers: Sequence[int]) -> int:
@@ -158,61 +223,60 @@ def _get_decade_counts(combo: Sequence[int]) -> Tuple[int, int, int, int, int]:
     return tuple(counts)
 
 
-def score_combination(combo: Sequence[int], overdue_numbers: Set[int] | None = None) -> int:
+def _score_from_ranges(value: int, ranges: Sequence[Dict], default_score: int) -> int:
+    for rule in ranges:
+        minimum = rule.get('min', float('-inf'))
+        maximum = rule.get('max', float('inf'))
+        if minimum <= value <= maximum:
+            return int(rule.get('score', default_score))
+    return int(default_score)
+
+
+def _score_from_map(value: int, score_map: Dict[int, int], default_score: int) -> int:
+    return int(score_map.get(value, default_score))
+
+
+def score_combination(combo: Sequence[int], overdue_numbers: Set[int] | None = None, score_config: Dict | None = None) -> int:
     overdue_numbers = overdue_numbers or set()
+    config = normalize_score_config(score_config)
     score = 0
+
     overdue_count = sum(1 for n in combo if n in overdue_numbers)
-    score += overdue_count * 15
+    score += overdue_count * int(config['overdue_weight'])
 
     ac = calculate_ac(combo)
-    if 8 <= ac <= 10:
-        score += 30
-    elif ac == 7:
-        score += 25
-    elif ac == 6:
-        score += 15
-    else:
-        score += 5
+    score += _score_from_ranges(ac, config['ac_ranges'], config['ac_default_score'])
 
     odd_count = get_odd_count(combo)
-    if odd_count in [3, 4]:
-        score += 25
-    elif odd_count == 2:
-        score += 20
-    else:
-        score += 5
+    score += _score_from_map(odd_count, config['odd_count_scores'], config['odd_default_score'])
 
     high_count = get_high_count(combo)
-    if high_count in [2, 3, 4]:
-        score += 20
-    else:
-        score += 5
+    score += _score_from_map(high_count, config['high_count_scores'], config['high_default_score'])
 
     total = get_sum(combo)
-    if 110 <= total <= 170:
-        score += 25
-    elif 100 <= total <= 180:
-        score += 15
-    else:
-        score += 5
+    score += _score_from_ranges(total, config['sum_ranges'], config['sum_default_score'])
 
     max_concentration = max(_get_decade_counts(combo))
-    if max_concentration <= 2:
-        score += 20
-    elif max_concentration <= 3:
-        score += 10
+    concentration_score = config['concentration_default_score']
+    for threshold, threshold_score in sorted(config['max_concentration_scores'].items()):
+        if max_concentration <= threshold:
+            concentration_score = threshold_score
+            break
+    score += int(concentration_score)
 
     return score
 
 
-def compute_static_score(combo: Sequence[int]) -> int:
-    return score_combination(combo, overdue_numbers=set())
+def compute_static_score(combo: Sequence[int], score_config: Dict | None = None) -> int:
+    return score_combination(combo, overdue_numbers=set(), score_config=score_config)
 
 
 def cache_key_for_rules(rules: Dict) -> str:
     filters = normalize_filters(rules.get('filters'))
     filter_bits = ''.join('1' if filters[f'f{i}'] else '0' for i in range(1, 9))
-    return f"minac{rules.get('min_ac', 5)}_filters{filter_bits}"
+    score_config = normalize_score_config(rules.get('score_config'))
+    score_signature = abs(hash(json_signature(score_config))) % 100000000
+    return f"minac{rules.get('min_ac', 5)}_filters{filter_bits}_score{score_signature}"
 
 
 def cache_path_for_rules(rules: Dict) -> str:
@@ -221,7 +285,7 @@ def cache_path_for_rules(rules: Dict) -> str:
 
 
 def build_or_load_repository(rules: Dict, force_rebuild: bool = False) -> ComboRepository:
-    normalized_rules = normalize_rules(rules.get('min_ac', 5), rules.get('filters'))
+    normalized_rules = normalize_rules(rules.get('min_ac', 5), rules.get('filters'), rules.get('score_config'))
     cache_path = cache_path_for_rules(normalized_rules)
 
     if not force_rebuild and os.path.exists(cache_path):
@@ -240,7 +304,7 @@ def build_or_load_repository(rules: Dict, force_rebuild: bool = False) -> ComboR
     for combo in itertools.combinations(range(1, 46), 6):
         if check_filters(combo, normalized_rules):
             masks.append(combo_to_mask(combo))
-            static_scores.append(compute_static_score(combo))
+            static_scores.append(compute_static_score(combo, normalized_rules.get('score_config')))
 
     payload = {
         'masks': masks,
@@ -328,10 +392,11 @@ def recommend_with_constraints(
     overdue_numbers: Set[int] | None = None,
     count: int = 10,
     seed: int | None = None,
+    score_config: Dict | None = None,
 ):
     fixed_nums = sorted(set(fixed_nums or []))
     exclude_nums = sorted(set(exclude_nums or []))
-    rules = normalize_rules(min_ac=min_ac, filters=filters)
+    rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
     overdue_numbers = overdue_numbers or set()
 
     pool = [n for n in range(1, 46) if n not in fixed_nums and n not in exclude_nums]
@@ -346,7 +411,7 @@ def recommend_with_constraints(
         combo = tuple(sorted(fixed_nums + list(additional)))
         if check_filters(combo, rules):
             valid_masks.append(combo_to_mask(combo))
-            static_scores.append(compute_static_score(combo))
+            static_scores.append(compute_static_score(combo, rules.get('score_config')))
 
     repository = ComboRepository(
         masks=array('Q', valid_masks),
