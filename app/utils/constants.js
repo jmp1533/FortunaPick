@@ -7,6 +7,19 @@ export const getBallColor = (num) => {
   return { bg: '#B0D840', text: '#000' };                  // 초록
 };
 
+export const RECOMMENDATION_MODES = {
+  stable: {
+    id: 'stable',
+    name: '안정형',
+    description: '평균 적중과 3개 이상 적중 회차 수를 우선하는 추천 방식'
+  },
+  high_hit: {
+    id: 'high_hit',
+    name: '고적중형',
+    description: '4개 이상 / 고적중 가능성을 더 노리는 추천 방식'
+  }
+};
+
 // 필터 정의
 export const FILTER_DEFINITIONS = {
   f1: {

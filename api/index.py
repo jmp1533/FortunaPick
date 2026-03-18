@@ -11,6 +11,12 @@ from http.server import BaseHTTPRequestHandler
 import json
 from lottery.analyzer import LotteryAnalyzer
 from lottery.engine import build_overdue_numbers, recommend_with_constraints
+from lottery.score_presets import SCORE_PRESETS
+
+RECOMMENDATION_MODES = {
+    'stable': 'balanced_distribution',
+    'high_hit': 'sum_relaxed',
+}
 
 
 def get_analyzer():
@@ -38,6 +44,14 @@ class handler(BaseHTTPRequestHandler):
             exclude_nums = data.get('exclude_nums', [])
             min_ac = int(data.get('min_ac', 5))
             filters = data.get('filters', {})
+            recommendation_mode = data.get('recommendation_mode', 'stable')
+            score_preset = data.get('score_preset')
+
+            if score_preset is None:
+                score_preset = RECOMMENDATION_MODES.get(recommendation_mode, RECOMMENDATION_MODES['stable'])
+
+            if score_preset not in SCORE_PRESETS:
+                raise ValueError('Invalid score preset')
 
             analyzer = get_analyzer()
             last_seen = analyzer.get_analysis_results().get('last_seen_draws_ago', {})
@@ -49,7 +63,10 @@ class handler(BaseHTTPRequestHandler):
                 min_ac=min_ac,
                 filters=filters,
                 overdue_numbers=overdue_numbers,
+                score_config=SCORE_PRESETS[score_preset],
             )
+            response['recommendation_mode'] = recommendation_mode
+            response['score_preset'] = score_preset
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

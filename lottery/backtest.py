@@ -17,6 +17,7 @@ if PROJECT_ROOT not in sys.path:
 
 from lottery.analyzer import LotteryAnalyzer
 from lottery.engine import build_or_load_repository, recommend_from_repository, normalize_rules, cache_key_for_rules, normalize_score_config
+from lottery.score_presets import SCORE_PRESETS
 
 MILESTONE_KEYS = [
     'had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6',
@@ -351,7 +352,7 @@ def run_filter_impact(rules, chronological, targets, recommend_count, seed_base,
     return filter_impact
 
 
-def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, seed_base=1000, force_rebuild=False, include_filter_impact=False, recent_window=30, checkpoint_dir=None, mode='full', score_config=None):
+def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, seed_base=1000, force_rebuild=False, include_filter_impact=False, recent_window=30, checkpoint_dir=None, mode='full', score_config=None, run_label='main'):
     started = time.time()
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
     repository = build_or_load_repository(rules, force_rebuild=force_rebuild)
@@ -385,12 +386,13 @@ def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, see
             'recent_window': recent_window,
             'checkpoint_dir': checkpoint_dir,
             'mode': mode,
+            'run_label': run_label,
         },
     }
 
     main_result = None
     if mode in ('full', 'main-only', 'filter-impact-only'):
-        main_checkpoint = os.path.join(checkpoint_dir, 'main.json') if checkpoint_dir else None
+        main_checkpoint = os.path.join(checkpoint_dir, f'{run_label}.json') if checkpoint_dir else None
         main_result = execute_backtest_pass(
             repository,
             chronological,
@@ -399,7 +401,7 @@ def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, see
             seed_base,
             recent_window,
             checkpoint_path=main_checkpoint,
-            variant_label='main',
+            variant_label=run_label,
         )
         result['summary'] = main_result['summary']
         result['rounds'] = main_result['summaries']
@@ -441,13 +443,25 @@ def main():
     parser.add_argument('--include-filter-impact', action='store_true', help='Run per-filter impact comparisons by disabling filters one at a time.')
     parser.add_argument('--mode', choices=['full', 'main-only', 'filter-impact-only'], default='full', help='Run main backtest only, filter impact only, or both.')
     parser.add_argument('--checkpoint-dir', default=os.path.join(CURRENT_DIR, '.backtest-checkpoints'), help='Directory for resumable checkpoint files.')
+    parser.add_argument('--run-label', default='main', help='Unique label for checkpoint isolation per run.')
+    parser.add_argument('--score-preset', default=None, choices=sorted(SCORE_PRESETS.keys()), help='Named score preset to use.')
     parser.add_argument('--score-config-json', default=None, help='Inline JSON string for score_config overrides.')
     parser.add_argument('--output', default=os.path.join(CURRENT_DIR, 'backtest_report.json'), help='Output JSON path.')
     args = parser.parse_args()
 
     score_config = None
+    if args.score_preset:
+        score_config = normalize_score_config(SCORE_PRESETS[args.score_preset])
     if args.score_config_json:
-        score_config = normalize_score_config(json.loads(args.score_config_json))
+        inline_override = normalize_score_config(json.loads(args.score_config_json))
+        score_config = normalize_score_config(inline_override if score_config is None else {**score_config, **inline_override})
+
+    run_label = args.run_label or 'main'
+    if run_label == 'main':
+        if args.score_preset:
+            run_label = f'compare-{args.score_preset}'
+        elif score_config is not None:
+            run_label = 'custom-score-config'
 
     result = run_backtest(
         test_rounds=args.rounds,
@@ -460,6 +474,7 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         mode=args.mode,
         score_config=score_config,
+        run_label=run_label,
     )
 
     with open(args.output, 'w', encoding='utf-8') as fh:

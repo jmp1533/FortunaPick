@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // import AdBanner from './components/AdBanner'; // AdSense temporarily disabled
 // import { ADSENSE_CONFIG } from './utils/ads'; // AdSense temporarily disabled
 import { 
-  FILTER_DEFINITIONS, 
+  FILTER_DEFINITIONS,
+  RECOMMENDATION_MODES,
   calculateAC, 
   getOddEvenRatio, 
   getDecadeDistribution,
@@ -634,6 +635,7 @@ export default function Home() {
   const [includeNumbers, setIncludeNumbers] = useState([]);
   const [excludeNumbers, setExcludeNumbers] = useState([]);
   const [minAc, setMinAc] = useState(5);
+  const [recommendationMode, setRecommendationMode] = useState('stable');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [openCombo, setOpenCombo] = useState(null);
   const [result, setResult] = useState(null);
@@ -727,7 +729,8 @@ export default function Home() {
           fixed_nums: includeNumbers, 
           exclude_nums: excludeNumbers, 
           min_ac: minAc === '' ? 0 : minAc, 
-          filters 
+          filters,
+          recommendation_mode: recommendationMode,
         })
       });
       const data = await res.json();
@@ -963,6 +966,42 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* 추천 모드 선택 */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">
+                    <div className="card-title-icon">
+                      <Icons.Sparkle />
+                    </div>
+                    추천 모드 선택
+                  </div>
+                </div>
+                <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
+                  {Object.values(RECOMMENDATION_MODES).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setRecommendationMode(mode.id)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        border: recommendationMode === mode.id ? '2px solid var(--primary)' : '1px solid var(--border)',
+                        background: recommendationMode === mode.id ? 'var(--primary-bg)' : 'var(--card-bg)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{mode.name}</span>
+                        {recommendationMode === mode.id && <span style={{ color: 'var(--primary)', fontWeight: 700 }}>선택됨</span>}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>{mode.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* 생성 버튼 */}
               <button 
                 className="generate-btn" 
@@ -1061,6 +1100,10 @@ export default function Home() {
                             <Icons.List />
                           </div>
                           추천 번호 조합
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
+                          <Icons.Sparkle />
+                          {RECOMMENDATION_MODES[result?.recommendation_mode || recommendationMode]?.name || '안정형'}
                         </div>
                       </div>
                       <div className="result-list">
