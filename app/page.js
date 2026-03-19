@@ -252,7 +252,7 @@ const NumberComboBox = ({
 };
 
 // 분석 화면 컴포넌트
-const AnalysisView = ({ historyData, loading, error, updateStatus, updateLoading, onUpdate }) => {
+const AnalysisView = ({ historyData, loading, error }) => {
   const [activeTab, setActiveTab] = useState('cold'); // 'cold' or 'history'
   const [searchTerm, setSearchTerm] = useState('');
   const [searchNumberInput, setSearchNumberInput] = useState('');
@@ -397,33 +397,6 @@ const AnalysisView = ({ historyData, loading, error, updateStatus, updateLoading
 
       {/* 광고 영역 (상단) - Temporarily Disabled */}
       {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} /> */}
-
-      <div className="card" style={{ marginBottom: '16px' }}>
-        <div className="card-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>
-            엑셀 최신 회차: <strong style={{ color: 'var(--text-primary)' }}>{updateStatus?.latest_excel_round ?? '-'}</strong>
-          </div>
-          <button
-            type="button"
-            className="generate-btn"
-            onClick={onUpdate}
-            disabled={updateLoading}
-            style={{ width: 'auto', minWidth: '220px' }}
-          >
-            {updateLoading ? (
-              <>
-                <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
-                <span>반영 중...</span>
-              </>
-            ) : (
-              <>
-                <Icons.Chart />
-                <span>업데이트 반영하기</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
 
       {/* 분석 탭 네비게이션 */}
       <div className="tabs">
@@ -675,8 +648,6 @@ export default function Home() {
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
-  const [updateStatus, setUpdateStatus] = useState(null);
-  const [updateLoading, setUpdateLoading] = useState(false);
   
   const [filters, setFilters] = useState({
     f1: true, f2: true, f3: true, f4: true, 
@@ -722,26 +693,12 @@ export default function Home() {
     }
   }, []);
 
-  const fetchUpdateStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/update');
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || '업데이트 상태를 불러오는데 실패했습니다.');
-      }
-      setUpdateStatus(data);
-    } catch (err) {
-      console.error('Failed to load update status:', err);
-    }
-  }, []);
-
   // 당첨 이력 데이터 로드 (메인 페이지 접속 시 백그라운드 로드)
   useEffect(() => {
     if (!historyData && !historyLoading) {
       fetchHistory();
     }
-    fetchUpdateStatus();
-  }, [fetchHistory, fetchUpdateStatus, historyData, historyLoading]);
+  }, [fetchHistory, historyData, historyLoading]);
 
   // 외부 클릭 감지하여 드롭다운 닫기
   useEffect(() => {
@@ -759,36 +716,6 @@ export default function Home() {
     setToast({ visible: true, message });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
   }, []);
-
-  const handleIncrementalUpdate = async () => {
-    setUpdateLoading(true);
-    try {
-      const res = await fetch('/api/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'all', recent_window: 30, recommend_count: 10, seed_base: 1000 })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || '업데이트 실행에 실패했습니다.');
-      }
-      setUpdateStatus(data);
-      await fetchHistory();
-      const updatedModes = Object.entries(data.update_results || {})
-        .filter(([, value]) => value.applied_rounds && value.applied_rounds.length > 0)
-        .map(([key, value]) => `${key}: ${value.applied_rounds.join(', ')}`);
-
-      if (updatedModes.length > 0) {
-        showToast(`업데이트 완료 (${updatedModes.join(' / ')})`);
-      } else {
-        showToast('이미 최신 회차가 모두 반영되어 있습니다');
-      }
-    } catch (error) {
-      showToast(error.message || '업데이트 중 오류가 발생했습니다');
-    } finally {
-      setUpdateLoading(false);
-    }
-  };
 
   // API 호출
   const handleGenerate = async () => {
@@ -1320,9 +1247,6 @@ export default function Home() {
             historyData={historyData} 
             loading={historyLoading} 
             error={historyError}
-            updateStatus={updateStatus}
-            updateLoading={updateLoading}
-            onUpdate={handleIncrementalUpdate}
           />
         )}
       </div>
