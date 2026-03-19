@@ -648,6 +648,7 @@ export default function Home() {
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [topPicksData, setTopPicksData] = useState(null);
   
   const [filters, setFilters] = useState({
     f1: true, f2: true, f3: true, f4: true, 
@@ -672,6 +673,17 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
+
+  const fetchTopPicks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/top-picks');
+      if (!res.ok) return;
+      const data = await res.json();
+      setTopPicksData(data);
+    } catch (err) {
+      console.error('Failed to load top picks:', err);
+    }
+  }, []);
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -698,7 +710,10 @@ export default function Home() {
     if (!historyData && !historyLoading) {
       fetchHistory();
     }
-  }, [fetchHistory, historyData, historyLoading]);
+    if (!topPicksData) {
+      fetchTopPicks();
+    }
+  }, [fetchHistory, historyData, historyLoading, fetchTopPicks, topPicksData]);
 
   // 외부 클릭 감지하여 드롭다운 닫기
   useEffect(() => {
@@ -1061,6 +1076,75 @@ export default function Home() {
 
             {/* 결과 패널 */}
             <main className="results-panel">
+              {topPicksData?.weeklyTopPicks?.length > 0 && (
+                <div className="card" style={{ marginBottom: '20px' }}>
+                  <div className="card-header">
+                    <div className="card-title">
+                      <div className="card-title-icon">
+                        <Icons.Star />
+                      </div>
+                      이번 주 종합 추천 TOP5
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      기준 회차 {topPicksData.latestRound}
+                    </div>
+                  </div>
+                  <div className="result-list">
+                    {topPicksData.weeklyTopPicks.map((item, idx) => (
+                      <div key={`weekly-${idx}`} className="result-item">
+                        <div className="result-rank">{idx + 1}</div>
+                        <div className="result-balls">
+                          {item.combo.map(num => (
+                            <LottoBall key={num} number={num} />
+                          ))}
+                        </div>
+                        <div className="result-meta" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {(item.tags || []).map((tag) => (
+                            <span key={tag} className="meta-badge highlight">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {topPicksData && (topPicksData.stableTopPicks?.length > 0 || topPicksData.highHitTopPicks?.length > 0) && (
+                <div className="stats-grid" style={{ marginBottom: '20px' }}>
+                  <div className="card">
+                    <div className="card-header">
+                      <div className="card-title">
+                        <Icons.Sparkle />
+                        안정형 대표 5개
+                      </div>
+                    </div>
+                    <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
+                      {(topPicksData.stableTopPicks || []).slice(0, 5).map((item, idx) => (
+                        <div key={`stable-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <strong style={{ minWidth: '18px' }}>{idx + 1}</strong>
+                          {item.combo.map(num => <LottoBall key={num} number={num} small />)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="card">
+                    <div className="card-header">
+                      <div className="card-title">
+                        <Icons.StarFilled />
+                        고적중형 대표 5개
+                      </div>
+                    </div>
+                    <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
+                      {(topPicksData.highHitTopPicks || []).slice(0, 5).map((item, idx) => (
+                        <div key={`high-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <strong style={{ minWidth: '18px' }}>{idx + 1}</strong>
+                          {item.combo.map(num => <LottoBall key={num} number={num} small />)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* 광고 영역 (결과 패널 상단) - Temporarily Disabled */}
               {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} /> */}
 
