@@ -18,6 +18,7 @@ if PROJECT_ROOT not in sys.path:
 from lottery.analyzer import LotteryAnalyzer
 from lottery.engine import build_or_load_repository, recommend_from_repository, normalize_rules, cache_key_for_rules, normalize_score_config
 from lottery.score_presets import SCORE_PRESETS
+from lottery.paths import get_checkpoint_dir, get_report_path
 
 MILESTONE_KEYS = [
     'had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6',
@@ -593,11 +594,11 @@ def main():
     parser.add_argument('--force-rebuild', action='store_true', help='Rebuild the valid combination cache.')
     parser.add_argument('--include-filter-impact', action='store_true', help='Run per-filter impact comparisons by disabling filters one at a time.')
     parser.add_argument('--mode', choices=['full', 'main-only', 'filter-impact-only'], default='full', help='Run main backtest only, filter impact only, or both.')
-    parser.add_argument('--checkpoint-dir', default=os.path.join(CURRENT_DIR, '.backtest-checkpoints'), help='Directory for resumable checkpoint files.')
+    parser.add_argument('--checkpoint-dir', default=get_checkpoint_dir(), help='Directory for resumable checkpoint files.')
     parser.add_argument('--run-label', default='main', help='Unique label for checkpoint isolation per run.')
     parser.add_argument('--score-preset', default=None, choices=sorted(SCORE_PRESETS.keys()), help='Named score preset to use.')
     parser.add_argument('--score-config-json', default=None, help='Inline JSON string for score_config overrides.')
-    parser.add_argument('--output', default=os.path.join(CURRENT_DIR, 'backtest_report.json'), help='Output JSON path.')
+    parser.add_argument('--output', default=get_report_path('backtest_report.json'), help='Output JSON path.')
     parser.add_argument('--incremental-update', action='store_true', help='Append only newly detected rounds to an existing backtest report.')
     args = parser.parse_args()
 

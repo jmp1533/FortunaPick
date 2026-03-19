@@ -17,6 +17,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set, Tuple
 
+from lottery.paths import get_cache_dir
+
 DEFAULT_FILTERS = {
     'f1': True,
     'f2': True,
@@ -60,7 +62,7 @@ DEFAULT_SCORE_CONFIG = {
     'concentration_default_score': 0,
 }
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), '.cache')
+CACHE_DIR = get_cache_dir()
 
 
 @dataclass

@@ -12,14 +12,15 @@ import json
 from lottery.analyzer import LotteryAnalyzer
 from lottery.backtest import update_backtest_report_incrementally
 from lottery.score_presets import SCORE_PRESETS
+from lottery.paths import get_report_path
 
 REPORT_TARGETS = {
     'stable': {
-        'report_path': os.path.join(os.path.dirname(__file__), '..', 'lottery', 'backtest_stable_report.json'),
+        'report_path': get_report_path('backtest_stable_report.json'),
         'score_config': SCORE_PRESETS['balanced_distribution'],
     },
     'high_hit': {
-        'report_path': os.path.join(os.path.dirname(__file__), '..', 'lottery', 'backtest_high_hit_report.json'),
+        'report_path': get_report_path('backtest_high_hit_report.json'),
         'score_config': SCORE_PRESETS['sum_relaxed'],
     },
 }
