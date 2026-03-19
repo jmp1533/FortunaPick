@@ -1,0 +1,72 @@
+[
+  {
+    "preset": "baseline_default",
+    "average_best_hit": 1.84,
+    "rounds_with_3_plus": 13,
+    "rounds_with_4_plus": 1,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 59,
+    "average_best_hit_delta": 0.55,
+    "elapsed_seconds": 1503.94
+  },
+  {
+    "preset": "overdue_light",
+    "average_best_hit": 1.84,
+    "rounds_with_3_plus": 13,
+    "rounds_with_4_plus": 1,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 59,
+    "average_best_hit_delta": 0.55,
+    "elapsed_seconds": 1649.95
+  },
+  {
+    "preset": "overdue_medium",
+    "average_best_hit": 1.84,
+    "rounds_with_3_plus": 13,
+    "rounds_with_4_plus": 1,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 59,
+    "average_best_hit_delta": 0.55,
+    "elapsed_seconds": 1636.53
+  },
+  {
+    "preset": "ac_emphasis",
+    "average_best_hit": 1.84,
+    "rounds_with_3_plus": 13,
+    "rounds_with_4_plus": 1,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 59,
+    "average_best_hit_delta": 0.55,
+    "elapsed_seconds": 1635.93
+  },
+  {
+    "preset": "balanced_distribution",
+    "average_best_hit": 1.96,
+    "rounds_with_3_plus": 24,
+    "rounds_with_4_plus": 0,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 65,
+    "average_best_hit_delta": 0.67,
+    "elapsed_seconds": 1536.75
+  },
+  {
+    "preset": "sum_relaxed",
+    "average_best_hit": 1.91,
+    "rounds_with_3_plus": 18,
+    "rounds_with_4_plus": 2,
+    "rounds_with_5_plus": 1,
+    "rounds_with_bonus_match": 63,
+    "average_best_hit_delta": 0.62,
+    "elapsed_seconds": 1640.79
+  },
+  {
+    "preset": "conservative_hotcold",
+    "average_best_hit": 1.96,
+    "rounds_with_3_plus": 24,
+    "rounds_with_4_plus": 0,
+    "rounds_with_5_plus": 0,
+    "rounds_with_bonus_match": 65,
+    "average_best_hit_delta": 0.67,
+    "elapsed_seconds": 1530.51
+  }
+]

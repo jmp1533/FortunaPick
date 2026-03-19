@@ -1,0 +1,65 @@
+[
+  {
+    "preset": "baseline_default",
+    "average_best_hit": 2.0667,
+    "rounds_with_3_plus": 5,
+    "rounds_with_4_plus": 1,
+    "rounds_with_bonus_match": 20,
+    "average_best_hit_delta": 0.7,
+    "elapsed_seconds": 740.64
+  },
+  {
+    "preset": "overdue_light",
+    "average_best_hit": 2.0667,
+    "rounds_with_3_plus": 5,
+    "rounds_with_4_plus": 1,
+    "rounds_with_bonus_match": 20,
+    "average_best_hit_delta": 0.7,
+    "elapsed_seconds": 901.56
+  },
+  {
+    "preset": "overdue_medium",
+    "average_best_hit": 2.0667,
+    "rounds_with_3_plus": 5,
+    "rounds_with_4_plus": 1,
+    "rounds_with_bonus_match": 20,
+    "average_best_hit_delta": 0.7,
+    "elapsed_seconds": 897.6
+  },
+  {
+    "preset": "ac_emphasis",
+    "average_best_hit": 2.0667,
+    "rounds_with_3_plus": 5,
+    "rounds_with_4_plus": 1,
+    "rounds_with_bonus_match": 20,
+    "average_best_hit_delta": 0.7,
+    "elapsed_seconds": 925.55
+  },
+  {
+    "preset": "balanced_distribution",
+    "average_best_hit": 2.2333,
+    "rounds_with_3_plus": 11,
+    "rounds_with_4_plus": 0,
+    "rounds_with_bonus_match": 24,
+    "average_best_hit_delta": 0.8667,
+    "elapsed_seconds": 813.71
+  },
+  {
+    "preset": "sum_relaxed",
+    "average_best_hit": 2.2667,
+    "rounds_with_3_plus": 8,
+    "rounds_with_4_plus": 2,
+    "rounds_with_bonus_match": 21,
+    "average_best_hit_delta": 0.9,
+    "elapsed_seconds": 887.02
+  },
+  {
+    "preset": "conservative_hotcold",
+    "average_best_hit": 2.2333,
+    "rounds_with_3_plus": 11,
+    "rounds_with_4_plus": 0,
+    "rounds_with_bonus_match": 24,
+    "average_best_hit_delta": 0.8667,
+    "elapsed_seconds": 829.05
+  }
+]
