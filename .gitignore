@@ -8,3 +8,4 @@ lottery/backtest_report_*.json
 lottery/backtest_*test.json
 lottery/backtest_*.json
 lottery/compare_*.json
+backup/backtests/
