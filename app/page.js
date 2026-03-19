@@ -252,7 +252,7 @@ const NumberComboBox = ({
 };
 
 // 분석 화면 컴포넌트
-const AnalysisView = ({ historyData, loading, error }) => {
+const AnalysisView = ({ historyData, loading, error, updateStatus, updateLoading, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('cold'); // 'cold' or 'history'
   const [searchTerm, setSearchTerm] = useState('');
   const [searchNumberInput, setSearchNumberInput] = useState('');
@@ -397,6 +397,33 @@ const AnalysisView = ({ historyData, loading, error }) => {
 
       {/* 광고 영역 (상단) - Temporarily Disabled */}
       {/* <AdBanner slotId={ADSENSE_CONFIG.SLOTS.BANNER_TOP} /> */}
+
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <div className="card-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>
+            엑셀 최신 회차: <strong style={{ color: 'var(--text-primary)' }}>{updateStatus?.latest_excel_round ?? '-'}</strong>
+          </div>
+          <button
+            type="button"
+            className="generate-btn"
+            onClick={onUpdate}
+            disabled={updateLoading}
+            style={{ width: 'auto', minWidth: '220px' }}
+          >
+            {updateLoading ? (
+              <>
+                <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
+                <span>반영 중...</span>
+              </>
+            ) : (
+              <>
+                <Icons.Chart />
+                <span>업데이트 반영하기</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* 분석 탭 네비게이션 */}
       <div className="tabs">
@@ -1011,49 +1038,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 최신 회차 반영 */}
-              <div className="card">
-                <div className="card-header">
-                  <div className="card-title">
-                    <div className="card-title-icon">
-                      <Icons.Chart />
-                    </div>
-                    최신 회차 반영
-                  </div>
-                </div>
-                <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
-                  <div style={{ fontSize: '0.92rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    엑셀 최신 회차를 기준으로 누락된 회차만 증분 반영해.
-                  </div>
-                  <div style={{ display: 'grid', gap: '6px', fontSize: '0.9rem' }}>
-                    <div><strong>엑셀 최신 회차:</strong> {updateStatus?.latest_excel_round ?? '-'}</div>
-                    <div><strong>안정형 반영 최신:</strong> {updateStatus?.targets?.stable?.latest_report_round ?? '-'}</div>
-                    <div><strong>고적중형 반영 최신:</strong> {updateStatus?.targets?.high_hit?.latest_report_round ?? '-'}</div>
-                    <div><strong>안정형 누락:</strong> {updateStatus?.targets?.stable?.missing_rounds?.length ? updateStatus.targets.stable.missing_rounds.join(', ') : '없음'}</div>
-                    <div><strong>고적중형 누락:</strong> {updateStatus?.targets?.high_hit?.missing_rounds?.length ? updateStatus.targets.high_hit.missing_rounds.join(', ') : '없음'}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="generate-btn"
-                    onClick={handleIncrementalUpdate}
-                    disabled={updateLoading}
-                    style={{ marginTop: '4px' }}
-                  >
-                    {updateLoading ? (
-                      <>
-                        <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
-                        <span>반영 중...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icons.Chart />
-                        <span>업데이트 반영하기</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
               {/* 추천 모드 선택 */}
               <div className="card">
                 <div className="card-header">
@@ -1335,7 +1319,10 @@ export default function Home() {
           <AnalysisView 
             historyData={historyData} 
             loading={historyLoading} 
-            error={historyError} 
+            error={historyError}
+            updateStatus={updateStatus}
+            updateLoading={updateLoading}
+            onUpdate={handleIncrementalUpdate}
           />
         )}
       </div>
