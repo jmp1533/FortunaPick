@@ -210,6 +210,22 @@ class LotteryAnalyzer:
             return []
         return self.df.head(count)[['회차', 'winning_numbers', 'bonus_number']].to_dict(orient='records')
 
+    def get_all_draws(self):
+        if self.df.empty:
+            return []
+        return self.df[['회차', 'winning_numbers', 'bonus_number']].to_dict(orient='records')
+
+    def get_latest_round_number(self):
+        if self.df.empty:
+            return None
+        latest = self.get_latest_draws(count=1)
+        return int(latest[0]['회차']) if latest else None
+
+    def get_round_numbers(self):
+        if self.df.empty:
+            return []
+        return [int(item['회차']) for item in self.get_all_draws()]
+
 
 class SimpleSeries(list):
     def apply(self, func):

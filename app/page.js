@@ -648,6 +648,8 @@ export default function Home() {
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
   
   const [filters, setFilters] = useState({
     f1: true, f2: true, f3: true, f4: true, 
@@ -673,33 +675,46 @@ export default function Home() {
     localStorage.setItem('fortunapick_saved', JSON.stringify(savedCombinations));
   }, [savedCombinations]);
 
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/history');
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || '데이터를 불러오는데 실패했습니다.');
+      }
+      
+      setHistoryData(data);
+      setHistoryError(null);
+    } catch (err) {
+      console.error("Failed to load history data in background:", err);
+      setHistoryError(err.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const fetchUpdateStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/update');
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '업데이트 상태를 불러오는데 실패했습니다.');
+      }
+      setUpdateStatus(data);
+    } catch (err) {
+      console.error('Failed to load update status:', err);
+    }
+  }, []);
+
   // 당첨 이력 데이터 로드 (메인 페이지 접속 시 백그라운드 로드)
   useEffect(() => {
-    // 이미 데이터가 있거나 로딩 중이면 스킵
-    if (historyData || historyLoading) return;
-
-    const fetchHistory = async () => {
-      setHistoryLoading(true);
-      try {
-        const res = await fetch('/api/history');
-        const data = await res.json();
-        
-        if (!res.ok) {
-          throw new Error(data.error || '데이터를 불러오는데 실패했습니다.');
-        }
-        
-        setHistoryData(data);
-      } catch (err) {
-        console.error("Failed to load history data in background:", err);
-        setHistoryError(err.message);
-      } finally {
-        setHistoryLoading(false);
-      }
-    };
-
-    // 백그라운드에서 조용히 실행
-    fetchHistory();
-  }, []); // 빈 의존성 배열로 마운트 시 한 번만 실행
+    if (!historyData && !historyLoading) {
+      fetchHistory();
+    }
+    fetchUpdateStatus();
+  }, [fetchHistory, fetchUpdateStatus, historyData, historyLoading]);
 
   // 외부 클릭 감지하여 드롭다운 닫기
   useEffect(() => {
@@ -717,6 +732,36 @@ export default function Home() {
     setToast({ visible: true, message });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
   }, []);
+
+  const handleIncrementalUpdate = async () => {
+    setUpdateLoading(true);
+    try {
+      const res = await fetch('/api/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'all', recent_window: 30, recommend_count: 10, seed_base: 1000 })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '업데이트 실행에 실패했습니다.');
+      }
+      setUpdateStatus(data);
+      await fetchHistory();
+      const updatedModes = Object.entries(data.update_results || {})
+        .filter(([, value]) => value.applied_rounds && value.applied_rounds.length > 0)
+        .map(([key, value]) => `${key}: ${value.applied_rounds.join(', ')}`);
+
+      if (updatedModes.length > 0) {
+        showToast(`업데이트 완료 (${updatedModes.join(' / ')})`);
+      } else {
+        showToast('이미 최신 회차가 모두 반영되어 있습니다');
+      }
+    } catch (error) {
+      showToast(error.message || '업데이트 중 오류가 발생했습니다');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
 
   // API 호출
   const handleGenerate = async () => {
@@ -963,6 +1008,49 @@ export default function Home() {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* 최신 회차 반영 */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">
+                    <div className="card-title-icon">
+                      <Icons.Chart />
+                    </div>
+                    최신 회차 반영
+                  </div>
+                </div>
+                <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
+                  <div style={{ fontSize: '0.92rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    엑셀 최신 회차를 기준으로 누락된 회차만 증분 반영해.
+                  </div>
+                  <div style={{ display: 'grid', gap: '6px', fontSize: '0.9rem' }}>
+                    <div><strong>엑셀 최신 회차:</strong> {updateStatus?.latest_excel_round ?? '-'}</div>
+                    <div><strong>안정형 반영 최신:</strong> {updateStatus?.targets?.stable?.latest_report_round ?? '-'}</div>
+                    <div><strong>고적중형 반영 최신:</strong> {updateStatus?.targets?.high_hit?.latest_report_round ?? '-'}</div>
+                    <div><strong>안정형 누락:</strong> {updateStatus?.targets?.stable?.missing_rounds?.length ? updateStatus.targets.stable.missing_rounds.join(', ') : '없음'}</div>
+                    <div><strong>고적중형 누락:</strong> {updateStatus?.targets?.high_hit?.missing_rounds?.length ? updateStatus.targets.high_hit.missing_rounds.join(', ') : '없음'}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="generate-btn"
+                    onClick={handleIncrementalUpdate}
+                    disabled={updateLoading}
+                    style={{ marginTop: '4px' }}
+                  >
+                    {updateLoading ? (
+                      <>
+                        <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span>
+                        <span>반영 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Chart />
+                        <span>업데이트 반영하기</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 

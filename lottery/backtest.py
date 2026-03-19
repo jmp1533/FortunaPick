@@ -232,6 +232,31 @@ def save_checkpoint(path: Optional[str], payload: Dict):
     os.replace(tmp_path, path)
 
 
+def recalculate_summary_from_rounds(summaries):
+    aggregate_hits = Counter()
+    aggregate_bonus_hits = Counter()
+    baseline_aggregate_hits = Counter()
+    baseline_aggregate_bonus_hits = Counter()
+    milestone_counts = defaultdict(int)
+    baseline_milestone_counts = defaultdict(int)
+
+    for item in summaries:
+        update_aggregates(item, aggregate_hits, aggregate_bonus_hits, milestone_counts)
+        update_aggregates(item['baseline'], baseline_aggregate_hits, baseline_aggregate_bonus_hits, baseline_milestone_counts)
+
+    started = time.time()
+    return summarize_backtest_run(
+        summaries,
+        aggregate_hits,
+        aggregate_bonus_hits,
+        baseline_aggregate_hits,
+        baseline_aggregate_bonus_hits,
+        milestone_counts,
+        baseline_milestone_counts,
+        started,
+    )
+
+
 def execute_backtest_pass(repository, chronological, targets, recommend_count, seed_base, recent_window, checkpoint_path=None, variant_label='main'):
     started = time.time()
     summaries = []
@@ -352,6 +377,132 @@ def run_filter_impact(rules, chronological, targets, recommend_count, seed_base,
     return filter_impact
 
 
+def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, recommend_count=10, seed_base=1000, recent_window=30, score_config=None):
+    analyzer = LotteryAnalyzer()
+    if analyzer.df.empty:
+        raise RuntimeError('No lottery data available for incremental update.')
+
+    latest_round = analyzer.get_latest_round_number()
+    all_draws_desc = analyzer.get_all_draws()
+    chronological = list(reversed(all_draws_desc))
+
+    existing = None
+    if os.path.exists(report_path):
+        with open(report_path, encoding='utf-8') as fh:
+            existing = json.load(fh)
+
+    if not existing:
+        initial_rounds = min(100, max(1, len(chronological) - 1))
+        generated = run_backtest(
+            test_rounds=initial_rounds,
+            min_ac=min_ac,
+            filters=filters,
+            recommend_count=recommend_count,
+            seed_base=seed_base,
+            force_rebuild=False,
+            include_filter_impact=False,
+            recent_window=recent_window,
+            checkpoint_dir=None,
+            mode='main-only',
+            score_config=score_config,
+            run_label='initial-generate',
+        )
+        with open(report_path, 'w', encoding='utf-8') as fh:
+            json.dump(generated, fh, ensure_ascii=False, indent=2)
+        return {
+            'status': 'initialized',
+            'latest_round': latest_round,
+            'missing_rounds': [],
+            'applied_rounds': [int(item['round']) for item in generated.get('rounds', [])],
+            'report': generated,
+        }
+
+    existing_rounds = existing.get('rounds', [])
+    existing_round_numbers = {int(item['round']) for item in existing_rounds}
+    available_round_numbers = [int(item['회차']) for item in all_draws_desc]
+    missing_rounds = [round_no for round_no in available_round_numbers if round_no not in existing_round_numbers]
+
+    if not missing_rounds:
+        return {
+            'status': 'up_to_date',
+            'latest_round': latest_round,
+            'existing_latest_round': max(existing_round_numbers) if existing_round_numbers else None,
+            'missing_rounds': [],
+            'report': existing,
+        }
+
+    rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
+    repository = build_or_load_repository(rules, force_rebuild=False)
+
+    new_round_entries = []
+    for target_round in sorted(missing_rounds):
+        target_index = next((idx for idx, draw in enumerate(chronological) if int(draw['회차']) == target_round), None)
+        if target_index is None or target_index == 0:
+            continue
+
+        history_before_target = chronological[:target_index]
+        window_draws = history_before_target[-recent_window:]
+        window_stats = SlidingWindowStats(window_draws, window_size=recent_window)
+        target = chronological[target_index]
+
+        overdue_numbers = window_stats.overdue_numbers(threshold=25)
+        recommendations = recommend_from_repository(
+            repository,
+            overdue_numbers=overdue_numbers,
+            count=recommend_count,
+            seed=seed_base + target_round,
+        )
+        baseline_recommendations = window_stats.baseline_recommendations(recommend_count=recommend_count)
+        evaluation = evaluate_round(recommendations, target['winning_numbers'], target['bonus_number'])
+        baseline_evaluation = evaluate_round(baseline_recommendations, target['winning_numbers'], target['bonus_number'])
+
+        new_round_entries.append({
+            'round': int(target['회차']),
+            'target_numbers': target['winning_numbers'],
+            'bonus_number': int(target['bonus_number']),
+            'recommendations': [list(combo) for combo in recommendations],
+            'baseline_recommendations': [list(combo) for combo in baseline_recommendations],
+            **evaluation,
+            'baseline': baseline_evaluation,
+        })
+
+    combined_rounds = existing_rounds + new_round_entries
+    combined_rounds.sort(key=lambda item: int(item['round']))
+
+    existing['generatedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    existing['rules'] = rules
+    existing['score_config'] = rules.get('score_config')
+    existing['repository'] = {
+        'total_valid_combinations': repository.total_valid,
+        'cacheKey': cache_key_for_rules(rules)
+    }
+    existing.setdefault('settings', {})
+    existing['settings']['recent_window'] = recent_window
+    existing['settings']['recommend_count'] = recommend_count
+    existing['settings']['seed_base'] = seed_base
+    existing['settings']['incremental_update'] = True
+    existing['settings']['latest_excel_round'] = latest_round
+    existing['rounds'] = combined_rounds
+    existing['summary'] = recalculate_summary_from_rounds(combined_rounds)
+    existing['incremental_update'] = {
+        'applied_rounds': [int(item['round']) for item in new_round_entries],
+        'latest_round': latest_round,
+        'existing_round_count': len(existing_rounds),
+        'updated_round_count': len(combined_rounds),
+    }
+
+    with open(report_path, 'w', encoding='utf-8') as fh:
+        json.dump(existing, fh, ensure_ascii=False, indent=2)
+
+    return {
+        'status': 'updated',
+        'latest_round': latest_round,
+        'missing_rounds': missing_rounds,
+        'applied_rounds': [int(item['round']) for item in new_round_entries],
+        'report': existing,
+    }
+
+
 def run_backtest(test_rounds=30, min_ac=5, filters=None, recommend_count=10, seed_base=1000, force_rebuild=False, include_filter_impact=False, recent_window=30, checkpoint_dir=None, mode='full', score_config=None, run_label='main'):
     started = time.time()
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
@@ -447,6 +598,7 @@ def main():
     parser.add_argument('--score-preset', default=None, choices=sorted(SCORE_PRESETS.keys()), help='Named score preset to use.')
     parser.add_argument('--score-config-json', default=None, help='Inline JSON string for score_config overrides.')
     parser.add_argument('--output', default=os.path.join(CURRENT_DIR, 'backtest_report.json'), help='Output JSON path.')
+    parser.add_argument('--incremental-update', action='store_true', help='Append only newly detected rounds to an existing backtest report.')
     args = parser.parse_args()
 
     score_config = None
@@ -462,6 +614,25 @@ def main():
             run_label = f'compare-{args.score_preset}'
         elif score_config is not None:
             run_label = 'custom-score-config'
+
+    if args.incremental_update:
+        result = update_backtest_report_incrementally(
+            report_path=args.output,
+            min_ac=args.min_ac,
+            filters=None,
+            recommend_count=args.recommend_count,
+            seed_base=args.seed_base,
+            recent_window=args.recent_window,
+            score_config=score_config,
+        )
+        print(json.dumps({
+            'status': result['status'],
+            'latest_round': result.get('latest_round'),
+            'missing_rounds': result.get('missing_rounds', []),
+            'applied_rounds': result.get('applied_rounds', []),
+        }, ensure_ascii=False, indent=2))
+        print(f"Updated report: {args.output}")
+        return
 
     result = run_backtest(
         test_rounds=args.rounds,
