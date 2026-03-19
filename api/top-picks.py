@@ -9,8 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from http.server import BaseHTTPRequestHandler
 import json
-from lottery.paths import get_report_path
 from lottery.top_picks import TOP_PICKS_FILENAME
+
+TOP_PICKS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'lottery', TOP_PICKS_FILENAME))
 
 
 class handler(BaseHTTPRequestHandler):
@@ -23,7 +24,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            path = get_report_path(TOP_PICKS_FILENAME)
+            path = TOP_PICKS_PATH
             if not os.path.exists(path):
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
