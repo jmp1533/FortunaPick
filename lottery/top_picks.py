@@ -30,6 +30,76 @@ def combo_overlap(a: Sequence[int], b: Sequence[int]) -> int:
     return len(set(a) & set(b))
 
 
+def consecutive_runs(nums: Sequence[int]) -> List[List[int]]:
+    nums = sorted(nums)
+    runs = []
+    run = [nums[0]]
+    for n in nums[1:]:
+        if n == run[-1] + 1:
+            run.append(n)
+        else:
+            runs.append(run)
+            run = [n]
+    runs.append(run)
+    return runs
+
+
+def mirror_pairs(nums: Sequence[int]) -> List[tuple[int, int]]:
+    s = set(nums)
+    pairs = []
+    for n in sorted(nums):
+        m = 46 - n
+        if n < m and m in s:
+            pairs.append((n, m))
+    return pairs
+
+
+def ending_max_count(nums: Sequence[int]) -> int:
+    counts: Dict[int, int] = {}
+    for n in nums:
+        key = n % 10
+        counts[key] = counts.get(key, 0) + 1
+    return max(counts.values()) if counts else 0
+
+
+def elite_pattern_adjustment(combo: Sequence[int]) -> tuple[float, List[str]]:
+    adjustment = 0.0
+    reasons: List[str] = []
+
+    runs = [r for r in consecutive_runs(combo) if len(r) >= 2]
+    max_run = max((len(r) for r in runs), default=1)
+    run_groups = len(runs)
+    mirrors = len(mirror_pairs(combo))
+    ending_max = ending_max_count(combo)
+    low_count = sum(1 for n in combo if n <= 9)
+
+    if max_run >= 3:
+        adjustment -= 18
+        reasons.append('3연번 이상')
+    elif run_groups >= 2:
+        adjustment -= 10
+        reasons.append('연번 구간 2개')
+
+    if mirrors >= 2:
+        adjustment -= 12
+        reasons.append('거울수 2쌍+')
+
+    if ending_max >= 3:
+        adjustment -= 10
+        reasons.append('끝수 몰림')
+
+    if low_count >= 3:
+        adjustment -= 8
+        reasons.append('저숫자 3개+')
+
+    if max_run == 2 and run_groups == 1:
+        adjustment += 1.5
+    if mirrors == 1:
+        adjustment += 1.0
+
+    return adjustment, reasons
+
+
 def build_pick_tags(combo: Sequence[int], stable_score: float, high_score: float, overdue_numbers: set[int]) -> List[str]:
     tags = []
     ac = calculate_ac(combo)
@@ -102,13 +172,21 @@ def build_composite_candidates(candidate_masks: set[int], overdue_numbers: set[i
         composite_score = (stable_score * 0.55) + (high_score * 0.45)
         composite_score += min(stable_score, high_score) * 0.15
         composite_score -= abs(stable_score - high_score) * 0.08
+        elite_adjustment, elite_reasons = elite_pattern_adjustment(combo)
+        composite_score += elite_adjustment
+
+        tags = build_pick_tags(combo, stable_score, high_score, overdue_numbers)
+        if elite_reasons:
+            tags = [tag for tag in tags if tag not in {'균형 후보', '안정형 우세', '고적중형 우세'}]
+            tags.extend(elite_reasons[:1])
 
         candidates.append({
             'combo': combo,
             'stable_score': stable_score,
             'high_hit_score': high_score,
             'composite_score': round(composite_score, 4),
-            'tags': build_pick_tags(combo, stable_score, high_score, overdue_numbers),
+            'elite_adjustment': round(elite_adjustment, 2),
+            'tags': tags[:2],
         })
 
     candidates.sort(key=lambda item: (item['composite_score'], item['stable_score'], item['high_hit_score']), reverse=True)
