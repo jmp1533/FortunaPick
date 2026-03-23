@@ -34,6 +34,8 @@ SCORE_PRESETS = {
     }),
     'balanced_distribution': deep_merge_score(DEFAULT_SCORE_CONFIG, {
         'overdue_weight': 10,
+        'carryover_weight': 12,
+        'bonus_carryover_weight': 4,
         'odd_count_scores': {
             3: 28,
             4: 24,
@@ -51,6 +53,8 @@ SCORE_PRESETS = {
     }),
     'sum_relaxed': deep_merge_score(DEFAULT_SCORE_CONFIG, {
         'overdue_weight': 10,
+        'carryover_weight': 14,
+        'bonus_carryover_weight': 5,
         'sum_ranges': [
             {'min': 105, 'max': 175, 'score': 25},
             {'min': 95, 'max': 185, 'score': 15},

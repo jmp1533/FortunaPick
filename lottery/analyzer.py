@@ -152,6 +152,7 @@ class LotteryAnalyzer:
                     last_seen[num] = idx
         self.analysis_results['last_seen_draws_ago'] = last_seen
         self.analysis_results['group_concentration_distribution'] = Counter(self.df['winning_numbers'].apply(self._get_group_concentration_key))
+        self.analysis_results['carryover_metrics'] = self._build_carryover_metrics()
 
     def _calculate_ac(self, numbers):
         nums = sorted(list(numbers))
@@ -201,6 +202,54 @@ class LotteryAnalyzer:
             '41-45': sum(1 for n in numbers if 41 <= n <= 45),
         }
         return '-'.join(str(decades[key]) for key in sorted(decades.keys()))
+
+    def _build_carryover_metrics(self):
+        draws_desc = self.get_all_draws()
+        chronological = list(reversed(draws_desc))
+        if len(chronological) < 2:
+            return {
+                'repeat_distribution': {},
+                'bonus_augmented_repeat_distribution': {},
+                'average_repeat_count': 0,
+                'average_bonus_augmented_repeat_count': 0,
+                'latest': {
+                    'previous_round': None,
+                    'current_round': chronological[-1]['회차'] if chronological else None,
+                    'carryover_numbers': [],
+                    'bonus_carryover_numbers': [],
+                },
+            }
+
+        repeat_counts = []
+        bonus_repeat_counts = []
+        per_round = []
+        for idx in range(1, len(chronological)):
+            prev_draw = chronological[idx - 1]
+            cur_draw = chronological[idx]
+            prev_numbers = set(prev_draw['winning_numbers'])
+            cur_numbers = set(cur_draw['winning_numbers'])
+            carryover_numbers = sorted(prev_numbers & cur_numbers)
+            bonus_carryover_numbers = sorted(({int(prev_draw['bonus_number'])} & cur_numbers) - set(carryover_numbers))
+            repeat_counts.append(len(carryover_numbers))
+            bonus_repeat_counts.append(len((prev_numbers | {int(prev_draw['bonus_number'])}) & cur_numbers))
+            per_round.append({
+                'round': int(cur_draw['회차']),
+                'previous_round': int(prev_draw['회차']),
+                'carryover_numbers': carryover_numbers,
+                'carryover_count': len(carryover_numbers),
+                'bonus_carryover_numbers': bonus_carryover_numbers,
+                'bonus_carryover_count': len(bonus_carryover_numbers),
+            })
+
+        latest_pair = per_round[-1]
+        return {
+            'repeat_distribution': dict(sorted(Counter(repeat_counts).items())),
+            'bonus_augmented_repeat_distribution': dict(sorted(Counter(bonus_repeat_counts).items())),
+            'average_repeat_count': sum(repeat_counts) / len(repeat_counts),
+            'average_bonus_augmented_repeat_count': sum(bonus_repeat_counts) / len(bonus_repeat_counts),
+            'latest': latest_pair,
+            'recent_pairs': per_round[-10:],
+        }
 
     def get_analysis_results(self):
         return self.analysis_results

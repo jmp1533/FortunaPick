@@ -4,6 +4,8 @@ import pandas as pd
 import os
 import datetime
 
+from lottery.analyzer import LotteryAnalyzer
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
@@ -134,9 +136,11 @@ class handler(BaseHTTPRequestHandler):
 
             latest_round = history_data[0]['round'] if history_data else 0
 
+            analyzer = LotteryAnalyzer()
             response_data = {
                 'latestRound': latest_round,
-                'history': history_data
+                'history': history_data,
+                'carryoverMetrics': analyzer.get_analysis_results().get('carryover_metrics', {}),
             }
 
             self.send_response(200)

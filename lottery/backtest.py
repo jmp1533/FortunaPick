@@ -191,9 +191,23 @@ def summarize_backtest_run(summaries, aggregate_hits, aggregate_bonus_hits, base
     }
 
 
+def _normalize_main_hit_distribution(mapping):
+    normalized = Counter()
+    for key, value in (mapping or {}).items():
+        normalized[int(key)] += int(value)
+    return normalized
+
+
+def _normalize_bonus_hit_distribution(mapping):
+    normalized = Counter()
+    for key, value in (mapping or {}).items():
+        normalized[str(key)] += int(value)
+    return normalized
+
+
 def update_aggregates(evaluation, aggregate_hits, aggregate_bonus_hits, milestone_counts):
-    aggregate_hits.update(evaluation['distribution'])
-    aggregate_bonus_hits.update(evaluation['bonus_distribution'])
+    aggregate_hits.update(_normalize_main_hit_distribution(evaluation.get('distribution', {})))
+    aggregate_bonus_hits.update(_normalize_bonus_hit_distribution(evaluation.get('bonus_distribution', {})))
     for key in MILESTONE_KEYS:
         if evaluation[key]:
             milestone_counts[key] += 1
@@ -292,9 +306,14 @@ def execute_backtest_pass(repository, chronological, targets, recommend_count, s
     for relative_idx in range(start_index, len(targets)):
         target = targets[relative_idx]
         overdue_numbers = window_stats.overdue_numbers(threshold=25)
+        previous_draw = chronological[target_start + relative_idx - 1] if (target_start + relative_idx - 1) >= 0 else None
+        carryover_numbers = set(previous_draw['winning_numbers']) if previous_draw else set()
+        bonus_carryover_numbers = {int(previous_draw['bonus_number'])} if previous_draw else set()
         recommendations = recommend_from_repository(
             repository,
             overdue_numbers=overdue_numbers,
+            carryover_numbers=carryover_numbers,
+            bonus_carryover_numbers=bonus_carryover_numbers,
             count=recommend_count,
             seed=seed_base + target['회차'],
         )
@@ -310,6 +329,8 @@ def execute_backtest_pass(repository, chronological, targets, recommend_count, s
             'round': int(target['회차']),
             'target_numbers': target['winning_numbers'],
             'bonus_number': int(target['bonus_number']),
+            'carryover_source_numbers': sorted(carryover_numbers),
+            'bonus_carryover_source_numbers': sorted(bonus_carryover_numbers),
             'recommendations': [list(combo) for combo in recommendations],
             'baseline_recommendations': [list(combo) for combo in baseline_recommendations],
             **evaluation,
@@ -447,9 +468,14 @@ def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, re
         target = chronological[target_index]
 
         overdue_numbers = window_stats.overdue_numbers(threshold=25)
+        previous_draw = chronological[target_index - 1] if target_index > 0 else None
+        carryover_numbers = set(previous_draw['winning_numbers']) if previous_draw else set()
+        bonus_carryover_numbers = {int(previous_draw['bonus_number'])} if previous_draw else set()
         recommendations = recommend_from_repository(
             repository,
             overdue_numbers=overdue_numbers,
+            carryover_numbers=carryover_numbers,
+            bonus_carryover_numbers=bonus_carryover_numbers,
             count=recommend_count,
             seed=seed_base + target_round,
         )
@@ -461,6 +487,8 @@ def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, re
             'round': int(target['회차']),
             'target_numbers': target['winning_numbers'],
             'bonus_number': int(target['bonus_number']),
+            'carryover_source_numbers': sorted(carryover_numbers),
+            'bonus_carryover_source_numbers': sorted(bonus_carryover_numbers),
             'recommendations': [list(combo) for combo in recommendations],
             'baseline_recommendations': [list(combo) for combo in baseline_recommendations],
             **evaluation,

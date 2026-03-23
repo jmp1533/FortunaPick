@@ -32,6 +32,8 @@ DEFAULT_FILTERS = {
 
 DEFAULT_SCORE_CONFIG = {
     'overdue_weight': 15,
+    'carryover_weight': 12,
+    'bonus_carryover_weight': 4,
     'ac_ranges': [
         {'min': 8, 'max': 10, 'score': 30},
         {'min': 7, 'max': 7, 'score': 25},
@@ -87,6 +89,8 @@ def normalize_filters(filters: Dict | None) -> Dict[str, bool]:
 def normalize_score_config(score_config: Dict | None = None) -> Dict:
     merged = {
         'overdue_weight': DEFAULT_SCORE_CONFIG['overdue_weight'],
+        'carryover_weight': DEFAULT_SCORE_CONFIG['carryover_weight'],
+        'bonus_carryover_weight': DEFAULT_SCORE_CONFIG['bonus_carryover_weight'],
         'ac_ranges': [dict(item) for item in DEFAULT_SCORE_CONFIG['ac_ranges']],
         'ac_default_score': DEFAULT_SCORE_CONFIG['ac_default_score'],
         'odd_count_scores': dict(DEFAULT_SCORE_CONFIG['odd_count_scores']),
@@ -238,13 +242,25 @@ def _score_from_map(value: int, score_map: Dict[int, int], default_score: int) -
     return int(score_map.get(value, default_score))
 
 
-def score_combination(combo: Sequence[int], overdue_numbers: Set[int] | None = None, score_config: Dict | None = None) -> int:
+def score_combination(
+    combo: Sequence[int],
+    overdue_numbers: Set[int] | None = None,
+    carryover_numbers: Set[int] | None = None,
+    bonus_carryover_numbers: Set[int] | None = None,
+    score_config: Dict | None = None,
+) -> int:
     overdue_numbers = overdue_numbers or set()
+    carryover_numbers = carryover_numbers or set()
+    bonus_carryover_numbers = bonus_carryover_numbers or set()
     config = normalize_score_config(score_config)
     score = 0
 
     overdue_count = sum(1 for n in combo if n in overdue_numbers)
+    carryover_count = sum(1 for n in combo if n in carryover_numbers)
+    bonus_carryover_count = sum(1 for n in combo if n in bonus_carryover_numbers)
     score += overdue_count * int(config['overdue_weight'])
+    score += carryover_count * int(config['carryover_weight'])
+    score += bonus_carryover_count * int(config['bonus_carryover_weight'])
 
     ac = calculate_ac(combo)
     score += _score_from_ranges(ac, config['ac_ranges'], config['ac_default_score'])
@@ -332,19 +348,28 @@ def build_overdue_numbers(last_seen_draws_ago: Dict[int, int], threshold: int = 
 def recommend_from_repository(
     repository: ComboRepository,
     overdue_numbers: Set[int] | None = None,
+    carryover_numbers: Set[int] | None = None,
+    bonus_carryover_numbers: Set[int] | None = None,
     count: int = 10,
     seed: int | None = None,
 ) -> List[Tuple[int, ...]]:
     overdue_numbers = overdue_numbers or set()
+    carryover_numbers = carryover_numbers or set()
+    bonus_carryover_numbers = bonus_carryover_numbers or set()
     overdue_mask = combo_to_mask(sorted(overdue_numbers)) if overdue_numbers else 0
+    carryover_mask = combo_to_mask(sorted(carryover_numbers)) if carryover_numbers else 0
+    bonus_carryover_mask = combo_to_mask(sorted(bonus_carryover_numbers)) if bonus_carryover_numbers else 0
+    config = normalize_score_config(repository.rules.get('score_config'))
 
     if repository.total_valid == 0 or count <= 0:
         return []
 
     score_counts = Counter()
     for mask, static_score in repository.iter_entries():
-        overdue_bonus = ((mask & overdue_mask).bit_count() * 15) if overdue_mask else 0
-        total_score = static_score + overdue_bonus
+        overdue_bonus = ((mask & overdue_mask).bit_count() * int(config['overdue_weight'])) if overdue_mask else 0
+        carryover_bonus = ((mask & carryover_mask).bit_count() * int(config['carryover_weight'])) if carryover_mask else 0
+        bonus_carryover_bonus = ((mask & bonus_carryover_mask).bit_count() * int(config['bonus_carryover_weight'])) if bonus_carryover_mask else 0
+        total_score = static_score + overdue_bonus + carryover_bonus + bonus_carryover_bonus
         score_counts[total_score] += 1
 
     cumulative = 0
@@ -361,8 +386,10 @@ def recommend_from_repository(
     guaranteed = []
     tie_pool = []
     for mask, static_score in repository.iter_entries():
-        overdue_bonus = ((mask & overdue_mask).bit_count() * 15) if overdue_mask else 0
-        total_score = static_score + overdue_bonus
+        overdue_bonus = ((mask & overdue_mask).bit_count() * int(config['overdue_weight'])) if overdue_mask else 0
+        carryover_bonus = ((mask & carryover_mask).bit_count() * int(config['carryover_weight'])) if carryover_mask else 0
+        bonus_carryover_bonus = ((mask & bonus_carryover_mask).bit_count() * int(config['bonus_carryover_weight'])) if bonus_carryover_mask else 0
+        total_score = static_score + overdue_bonus + carryover_bonus + bonus_carryover_bonus
         entry = (total_score, mask)
         if total_score > cutoff_score:
             guaranteed.append(entry)
@@ -392,6 +419,8 @@ def recommend_with_constraints(
     min_ac: int = 5,
     filters: Dict | None = None,
     overdue_numbers: Set[int] | None = None,
+    carryover_numbers: Set[int] | None = None,
+    bonus_carryover_numbers: Set[int] | None = None,
     count: int = 10,
     seed: int | None = None,
     score_config: Dict | None = None,
@@ -400,6 +429,8 @@ def recommend_with_constraints(
     exclude_nums = sorted(set(exclude_nums or []))
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=score_config)
     overdue_numbers = overdue_numbers or set()
+    carryover_numbers = carryover_numbers or set()
+    bonus_carryover_numbers = bonus_carryover_numbers or set()
 
     pool = [n for n in range(1, 46) if n not in fixed_nums and n not in exclude_nums]
     needed = 6 - len(fixed_nums)
@@ -421,7 +452,14 @@ def recommend_with_constraints(
         total_valid=len(valid_masks),
         rules=rules,
     )
-    recommendations = recommend_from_repository(repository, overdue_numbers=overdue_numbers, count=count, seed=seed)
+    recommendations = recommend_from_repository(
+        repository,
+        overdue_numbers=overdue_numbers,
+        carryover_numbers=carryover_numbers,
+        bonus_carryover_numbers=bonus_carryover_numbers,
+        count=count,
+        seed=seed,
+    )
     filtered_ratio = f"{(1 - len(valid_masks) / max(1, total_space)) * 100:.1f}%"
 
     return {
@@ -432,6 +470,8 @@ def recommend_with_constraints(
             'excluded_count': len(exclude_nums),
             'pool_size': len(pool),
             'overdue_count': len(overdue_numbers),
+            'carryover_count': len(carryover_numbers),
+            'bonus_carryover_count': len(bonus_carryover_numbers),
             'filtered_ratio': filtered_ratio,
             'total_combination_space': total_space,
         }

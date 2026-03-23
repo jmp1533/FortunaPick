@@ -54,8 +54,13 @@ class handler(BaseHTTPRequestHandler):
                 raise ValueError('Invalid score preset')
 
             analyzer = get_analyzer()
-            last_seen = analyzer.get_analysis_results().get('last_seen_draws_ago', {})
+            analysis = analyzer.get_analysis_results()
+            last_seen = analysis.get('last_seen_draws_ago', {})
             overdue_numbers = build_overdue_numbers(last_seen, threshold=25)
+            carryover_latest = analysis.get('carryover_metrics', {}).get('latest', {})
+            latest_draw = analyzer.get_latest_draws(count=1)
+            carryover_numbers = set(latest_draw[0]['winning_numbers']) if latest_draw else set()
+            bonus_carryover_numbers = {int(latest_draw[0]['bonus_number'])} if latest_draw else set()
 
             response = recommend_with_constraints(
                 fixed_nums=fixed_nums,
@@ -63,9 +68,17 @@ class handler(BaseHTTPRequestHandler):
                 min_ac=min_ac,
                 filters=filters,
                 overdue_numbers=overdue_numbers,
+                carryover_numbers=carryover_numbers,
+                bonus_carryover_numbers=bonus_carryover_numbers,
                 score_config=SCORE_PRESETS[score_preset],
             )
             response['recommendation_mode'] = recommendation_mode
+            response['carryover_metrics'] = {
+                'carryover_numbers': sorted(carryover_numbers),
+                'bonus_carryover_numbers': sorted(bonus_carryover_numbers),
+                'source_previous_round': int(latest_draw[0]['회차']) if latest_draw else None,
+                'latest_observed_repeat': carryover_latest,
+            }
             response['score_preset'] = score_preset
 
             self.send_response(200)
