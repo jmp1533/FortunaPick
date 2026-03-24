@@ -12,6 +12,7 @@ import os
 import pickle
 import random
 import json
+import hashlib
 from array import array
 from collections import Counter
 from dataclasses import dataclass
@@ -293,7 +294,7 @@ def cache_key_for_rules(rules: Dict) -> str:
     filters = normalize_filters(rules.get('filters'))
     filter_bits = ''.join('1' if filters[f'f{i}'] else '0' for i in range(1, 9))
     score_config = normalize_score_config(rules.get('score_config'))
-    score_signature = abs(hash(json_signature(score_config))) % 100000000
+    score_signature = hashlib.sha256(json_signature(score_config).encode('utf-8')).hexdigest()[:16]
     return f"minac{rules.get('min_ac', 5)}_filters{filter_bits}_score{score_signature}"
 
 
@@ -364,37 +365,31 @@ def recommend_from_repository(
     if repository.total_valid == 0 or count <= 0:
         return []
 
-    score_counts = Counter()
+    scored_entries = []
     for mask, static_score in repository.iter_entries():
         overdue_bonus = ((mask & overdue_mask).bit_count() * int(config['overdue_weight'])) if overdue_mask else 0
         carryover_bonus = ((mask & carryover_mask).bit_count() * int(config['carryover_weight'])) if carryover_mask else 0
         bonus_carryover_bonus = ((mask & bonus_carryover_mask).bit_count() * int(config['bonus_carryover_weight'])) if bonus_carryover_mask else 0
         total_score = static_score + overdue_bonus + carryover_bonus + bonus_carryover_bonus
-        score_counts[total_score] += 1
+        scored_entries.append((total_score, mask))
 
-    cumulative = 0
-    cutoff_score = None
-    for score in sorted(score_counts.keys(), reverse=True):
-        cumulative += score_counts[score]
-        cutoff_score = score
-        if cumulative >= count:
-            break
-
-    if cutoff_score is None:
+    if not scored_entries:
         return []
+
+    scored_entries.sort(key=lambda item: item[0], reverse=True)
+    cutoff_index = min(count, len(scored_entries)) - 1
+    cutoff_score = scored_entries[cutoff_index][0]
 
     guaranteed = []
     tie_pool = []
-    for mask, static_score in repository.iter_entries():
-        overdue_bonus = ((mask & overdue_mask).bit_count() * int(config['overdue_weight'])) if overdue_mask else 0
-        carryover_bonus = ((mask & carryover_mask).bit_count() * int(config['carryover_weight'])) if carryover_mask else 0
-        bonus_carryover_bonus = ((mask & bonus_carryover_mask).bit_count() * int(config['bonus_carryover_weight'])) if bonus_carryover_mask else 0
-        total_score = static_score + overdue_bonus + carryover_bonus + bonus_carryover_bonus
-        entry = (total_score, mask)
+    for entry in scored_entries:
+        total_score, mask = entry
         if total_score > cutoff_score:
             guaranteed.append(entry)
         elif total_score == cutoff_score:
             tie_pool.append(entry)
+        else:
+            break
 
     rng = random.Random(seed)
     rng.shuffle(tie_pool)
