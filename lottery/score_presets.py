@@ -53,8 +53,17 @@ SCORE_PRESETS = {
     }),
     'sum_relaxed': deep_merge_score(DEFAULT_SCORE_CONFIG, {
         'overdue_weight': 10,
-        'carryover_weight': 14,
-        'bonus_carryover_weight': 5,
+        'carryover_count_scores': {
+            1: 14,
+            2: 20,
+            3: -4,
+            4: -16,
+            5: -28,
+            6: -44,
+        },
+        'bonus_carryover_count_scores': {
+            1: 4,
+        },
         'sum_ranges': [
             {'min': 105, 'max': 175, 'score': 25},
             {'min': 95, 'max': 185, 'score': 15},

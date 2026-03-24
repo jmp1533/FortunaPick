@@ -1,6 +1,7 @@
 {
-  "generatedAt": "2026-03-24T09:16:00Z",
+  "generatedAt": "2026-03-24T14:39:24Z",
   "latestRound": 1216,
+  "targetRound": 1217,
   "carryoverContext": {
     "source_round": 1216,
     "carryover_numbers": [
@@ -26,22 +27,22 @@
     }
   },
   "topCount": 5,
-  "bucketSize": 3000,
-  "compositeLimit": 8000,
-  "candidatePoolSize": 3653,
+  "bucketSize": 12000,
+  "compositeLimit": 25000,
+  "candidatePoolSize": 20794,
   "weeklyTopPicks": [
     {
       "combo": [
         3,
-        10,
+        4,
         14,
-        15,
-        23,
-        32
+        25,
+        32,
+        37
       ],
-      "stable_score": 170,
-      "high_hit_score": 180,
-      "composite_score": 201.7,
+      "stable_score": 158,
+      "high_hit_score": 148,
+      "composite_score": 177.4,
       "elite_adjustment": 2.5,
       "tags": [
         "AC 우수",
@@ -50,17 +51,53 @@
     },
     {
       "combo": [
+        14,
+        15,
+        22,
+        25,
+        31,
+        42
+      ],
+      "stable_score": 158,
+      "high_hit_score": 148,
+      "composite_score": 177.4,
+      "elite_adjustment": 2.5,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        2,
         3,
+        22,
+        24,
+        37,
+        45
+      ],
+      "stable_score": 154,
+      "high_hit_score": 144,
+      "composite_score": 172.8,
+      "elite_adjustment": 2.5,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        2,
         10,
         15,
-        23,
-        24,
-        40
+        39,
+        44,
+        45
       ],
-      "stable_score": 190,
-      "high_hit_score": 190,
-      "composite_score": 220.0,
-      "elite_adjustment": 1.5,
+      "stable_score": 154,
+      "high_hit_score": 144,
+      "composite_score": 172.8,
+      "elite_adjustment": 2.5,
       "tags": [
         "AC 우수",
         "홀짝 균형"
@@ -68,53 +105,17 @@
     },
     {
       "combo": [
-        3,
         10,
         15,
-        23,
-        24,
-        44
+        18,
+        25,
+        30,
+        31
       ],
-      "stable_score": 190,
-      "high_hit_score": 190,
-      "composite_score": 220.0,
-      "elite_adjustment": 1.5,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        3,
-        10,
-        14,
-        23,
-        24,
-        39
-      ],
-      "stable_score": 190,
-      "high_hit_score": 190,
-      "composite_score": 220.0,
-      "elite_adjustment": 1.5,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        3,
-        10,
-        14,
-        23,
-        24,
-        41
-      ],
-      "stable_score": 190,
-      "high_hit_score": 190,
-      "composite_score": 220.0,
-      "elite_adjustment": 1.5,
+      "stable_score": 158,
+      "high_hit_score": 148,
+      "composite_score": 177.4,
+      "elite_adjustment": 2.5,
       "tags": [
         "AC 우수",
         "홀짝 균형"
@@ -126,12 +127,42 @@
       "combo": [
         3,
         10,
+        18,
+        25,
+        44,
+        45
+      ],
+      "score": 158,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
         14,
         15,
-        23,
-        24
+        22,
+        25,
+        44,
+        45
       ],
-      "score": 182,
+      "score": 158,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        10,
+        15,
+        22,
+        25,
+        44,
+        45
+      ],
+      "score": 158,
       "tags": [
         "AC 우수",
         "홀짝 균형"
@@ -141,57 +172,27 @@
       "combo": [
         3,
         10,
+        22,
+        25,
+        44,
+        45
+      ],
+      "score": 158,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        10,
         14,
-        15,
+        21,
         25,
-        44
-      ],
-      "score": 182,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        1,
-        12,
-        23,
-        24,
-        42,
+        44,
         45
       ],
-      "score": 150,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        1,
-        2,
-        11,
-        25,
-        28,
-        44
-      ],
-      "score": 134,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        2,
-        4,
-        16,
-        37,
-        43,
-        45
-      ],
-      "score": 130,
+      "score": 158,
       "tags": [
         "AC 우수",
         "홀짝 균형"
@@ -203,39 +204,9 @@
       "combo": [
         3,
         10,
-        14,
-        15,
-        23,
-        24
-      ],
-      "score": 184,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        3,
-        10,
-        14,
-        15,
+        18,
         25,
-        38
-      ],
-      "score": 181,
-      "tags": [
-        "AC 우수",
-        "홀짝 균형"
-      ]
-    },
-    {
-      "combo": [
-        1,
-        11,
-        23,
-        24,
-        42,
+        44,
         45
       ],
       "score": 148,
@@ -246,14 +217,14 @@
     },
     {
       "combo": [
-        1,
-        2,
-        11,
-        22,
+        3,
+        14,
         25,
-        44
+        39,
+        44,
+        45
       ],
-      "score": 125,
+      "score": 148,
       "tags": [
         "AC 우수",
         "홀짝 균형"
@@ -261,14 +232,44 @@
     },
     {
       "combo": [
-        2,
-        4,
-        13,
+        3,
+        10,
+        25,
         39,
-        43,
+        44,
         45
       ],
-      "score": 120,
+      "score": 148,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        3,
+        15,
+        25,
+        38,
+        44,
+        45
+      ],
+      "score": 148,
+      "tags": [
+        "AC 우수",
+        "홀짝 균형"
+      ]
+    },
+    {
+      "combo": [
+        3,
+        14,
+        25,
+        38,
+        44,
+        45
+      ],
+      "score": 148,
       "tags": [
         "AC 우수",
         "홀짝 균형"

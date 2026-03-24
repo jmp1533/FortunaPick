@@ -22,10 +22,13 @@ from lottery.score_presets import SCORE_PRESETS
 
 TOP_PICKS_FILENAME = 'weekly_top_picks.json'
 DEFAULT_TOP_COUNT = 5
-DEFAULT_BUCKET_SIZE = 8000
-DEFAULT_COMPOSITE_LIMIT = 15000
-DEFAULT_MODE_BUCKET_SIZE = 5000
+DEFAULT_BUCKET_SIZE = 12000
+DEFAULT_COMPOSITE_LIMIT = 25000
+DEFAULT_MODE_BUCKET_SIZE = 15000
 DEFAULT_MAX_NUMBER_FREQUENCY = 2
+DEFAULT_WEEKLY_MAX_CARRYOVER = 2
+DEFAULT_STABLE_MAX_CARRYOVER = 2
+DEFAULT_HIGH_HIT_MAX_CARRYOVER = 2
 
 
 def combo_overlap(a: Sequence[int], b: Sequence[int]) -> int:
@@ -189,6 +192,7 @@ def collect_candidate_masks(
     stable_rules: Dict,
     high_rules: Dict,
     bucket_size: int,
+    max_carryover_count: int | None = None,
 ):
     overdue_mask = 0
     for n in overdue_numbers:
@@ -200,6 +204,10 @@ def collect_candidate_masks(
 
     for mask, _static_score in repository.iter_entries():
         combo = mask_to_combo(mask)
+        if max_carryover_count is not None:
+            carryover_count = len(set(combo) & set(carryover_numbers))
+            if carryover_count > max_carryover_count:
+                continue
         stable_score = score_combination(
             combo,
             overdue_numbers=overdue_numbers,
@@ -294,6 +302,8 @@ def _can_add_candidate(
     max_overlap: int,
     max_number_frequency: int,
     max_sum_band_frequency: int,
+    carryover_numbers: set[int] | None = None,
+    max_carryover_count: int | None = None,
 ) -> bool:
     combo = candidate['combo']
     if not all(combo_overlap(combo, picked['combo']) <= max_overlap for picked in selected):
@@ -301,6 +311,11 @@ def _can_add_candidate(
 
     if any(number_usage.get(n, 0) >= max_number_frequency for n in combo):
         return False
+
+    if carryover_numbers is not None and max_carryover_count is not None:
+        carryover_count = len(set(combo) & set(carryover_numbers))
+        if carryover_count > max_carryover_count:
+            return False
 
     profile = candidate.get('profile') or classify_profile(combo)
     sum_band = str(profile.get('sum_band', 'mid'))
@@ -316,6 +331,8 @@ def select_diversified_top_picks(
     max_overlap: int = 4,
     max_number_frequency: int = DEFAULT_MAX_NUMBER_FREQUENCY,
     max_sum_band_frequency: int = 2,
+    carryover_numbers: set[int] | None = None,
+    max_carryover_count: int | None = None,
 ) -> List[Dict]:
     selected: List[Dict] = []
     number_usage: Dict[int, int] = {}
@@ -330,7 +347,7 @@ def select_diversified_top_picks(
         for candidate in band_candidates:
             if candidate in selected:
                 continue
-            if _can_add_candidate(candidate, selected, number_usage, sum_band_usage, max_overlap, max_number_frequency, max_sum_band_frequency):
+            if _can_add_candidate(candidate, selected, number_usage, sum_band_usage, max_overlap, max_number_frequency, max_sum_band_frequency, carryover_numbers=carryover_numbers, max_carryover_count=max_carryover_count):
                 selected.append(candidate)
                 for n in candidate['combo']:
                     number_usage[n] = number_usage.get(n, 0) + 1
@@ -344,7 +361,7 @@ def select_diversified_top_picks(
     for candidate in candidates:
         if candidate in selected:
             continue
-        if _can_add_candidate(candidate, selected, number_usage, sum_band_usage, max_overlap, max_number_frequency, max_sum_band_frequency):
+        if _can_add_candidate(candidate, selected, number_usage, sum_band_usage, max_overlap, max_number_frequency, max_sum_band_frequency, carryover_numbers=carryover_numbers, max_carryover_count=max_carryover_count):
             selected.append(candidate)
             for n in candidate['combo']:
                 number_usage[n] = number_usage.get(n, 0) + 1
@@ -356,8 +373,14 @@ def select_diversified_top_picks(
 
     if len(selected) < target_count:
         for candidate in candidates:
-            if candidate not in selected:
-                selected.append(candidate)
+            if candidate in selected:
+                continue
+            combo = candidate['combo']
+            if carryover_numbers is not None and max_carryover_count is not None:
+                carryover_count = len(set(combo) & set(carryover_numbers))
+                if carryover_count > max_carryover_count:
+                    continue
+            selected.append(candidate)
             if len(selected) >= target_count:
                 break
 
@@ -382,9 +405,14 @@ def build_mode_top_picks(
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=SCORE_PRESETS[preset_name])
     repository = build_or_load_repository(rules, force_rebuild=False)
 
+    max_carryover = DEFAULT_STABLE_MAX_CARRYOVER if mode == 'stable' else DEFAULT_HIGH_HIT_MAX_CARRYOVER
+
     top_heap = []
     for mask, _ in repository.iter_entries():
         combo = mask_to_combo(mask)
+        carryover_count = len(set(combo) & set(carryover_numbers))
+        if carryover_count > max_carryover:
+            continue
         score = score_combination(
             combo,
             overdue_numbers=overdue_numbers,
@@ -411,9 +439,16 @@ def build_mode_top_picks(
             'profile': classify_profile(combo),
         })
 
+    max_carryover = DEFAULT_STABLE_MAX_CARRYOVER if mode == 'stable' else DEFAULT_HIGH_HIT_MAX_CARRYOVER
     return [
         {k: v for k, v in item.items() if k != 'profile'}
-        for item in select_diversified_top_picks(scored, target_count=top_count, max_overlap=4)
+        for item in select_diversified_top_picks(
+            scored,
+            target_count=top_count,
+            max_overlap=4,
+            carryover_numbers=carryover_numbers,
+            max_carryover_count=max_carryover,
+        )
     ]
 
 
@@ -444,6 +479,7 @@ def generate_weekly_top_picks(
         stable_rules,
         high_rules,
         bucket_size=bucket_size,
+        max_carryover_count=DEFAULT_WEEKLY_MAX_CARRYOVER,
     )
     composite_candidates = build_composite_candidates(
         candidate_masks,
@@ -453,7 +489,13 @@ def generate_weekly_top_picks(
         stable_rules,
         high_rules,
     )
-    weekly_top = select_diversified_top_picks(composite_candidates[:composite_limit], target_count=top_count, max_overlap=4)
+    weekly_top = select_diversified_top_picks(
+        composite_candidates[:composite_limit],
+        target_count=top_count,
+        max_overlap=4,
+        carryover_numbers=carryover_numbers,
+        max_carryover_count=DEFAULT_WEEKLY_MAX_CARRYOVER,
+    )
 
     stable_top = build_mode_top_picks('stable', top_count=top_count, min_ac=min_ac, filters=filters)
     high_top = build_mode_top_picks('high_hit', top_count=top_count, min_ac=min_ac, filters=filters)
