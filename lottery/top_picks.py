@@ -24,6 +24,7 @@ TOP_PICKS_FILENAME = 'weekly_top_picks.json'
 DEFAULT_TOP_COUNT = 5
 DEFAULT_BUCKET_SIZE = 8000
 DEFAULT_COMPOSITE_LIMIT = 15000
+DEFAULT_MODE_BUCKET_SIZE = 5000
 DEFAULT_MAX_NUMBER_FREQUENCY = 2
 
 
@@ -363,7 +364,13 @@ def select_diversified_top_picks(
     return selected
 
 
-def build_mode_top_picks(mode: str, top_count: int = DEFAULT_TOP_COUNT, min_ac: int = 5, filters: Dict | None = None):
+def build_mode_top_picks(
+    mode: str,
+    top_count: int = DEFAULT_TOP_COUNT,
+    min_ac: int = 5,
+    filters: Dict | None = None,
+    bucket_size: int = DEFAULT_MODE_BUCKET_SIZE,
+):
     analyzer = LotteryAnalyzer()
     analysis = analyzer.get_analysis_results()
     overdue_numbers = build_overdue_numbers(analysis.get('last_seen_draws_ago', {}), threshold=25)
@@ -375,9 +382,9 @@ def build_mode_top_picks(mode: str, top_count: int = DEFAULT_TOP_COUNT, min_ac: 
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=SCORE_PRESETS[preset_name])
     repository = build_or_load_repository(rules, force_rebuild=False)
 
-    scored = []
+    top_heap = []
     for mask, _ in repository.iter_entries():
-        combo = list(mask_to_combo(mask))
+        combo = mask_to_combo(mask)
         score = score_combination(
             combo,
             overdue_numbers=overdue_numbers,
@@ -385,9 +392,14 @@ def build_mode_top_picks(mode: str, top_count: int = DEFAULT_TOP_COUNT, min_ac: 
             bonus_carryover_numbers=bonus_carryover_numbers,
             score_config=rules['score_config'],
         )
+        push_topk(top_heap, float(score), mask, bucket_size)
+
+    scored = []
+    for score, mask in sorted(top_heap, key=lambda item: (item[0], item[1]), reverse=True):
+        combo = list(mask_to_combo(mask))
         scored.append({
             'combo': combo,
-            'score': score,
+            'score': int(score),
             'tags': build_pick_tags(
                 combo,
                 score if mode == 'stable' else 0,
@@ -396,10 +408,13 @@ def build_mode_top_picks(mode: str, top_count: int = DEFAULT_TOP_COUNT, min_ac: 
                 carryover_numbers,
                 bonus_carryover_numbers,
             ),
+            'profile': classify_profile(combo),
         })
 
-    scored.sort(key=lambda item: item['score'], reverse=True)
-    return select_diversified_top_picks(scored, target_count=top_count, max_overlap=4)
+    return [
+        {k: v for k, v in item.items() if k != 'profile'}
+        for item in select_diversified_top_picks(scored, target_count=top_count, max_overlap=4)
+    ]
 
 
 def generate_weekly_top_picks(

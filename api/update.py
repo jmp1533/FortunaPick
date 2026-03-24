@@ -13,6 +13,7 @@ from lottery.analyzer import LotteryAnalyzer
 from lottery.backtest import update_backtest_report_incrementally
 from lottery.score_presets import SCORE_PRESETS
 from lottery.paths import get_report_path
+from lottery.top_picks import generate_weekly_top_picks, save_weekly_top_picks
 
 REPORT_TARGETS = {
     'stable': {
@@ -119,8 +120,16 @@ class handler(BaseHTTPRequestHandler):
                     'applied_rounds': result.get('applied_rounds', []),
                 }
 
+            top_picks_payload = generate_weekly_top_picks()
+            top_picks_path = save_weekly_top_picks(top_picks_payload)
+
             response = build_status_payload()
             response['update_results'] = results
+            response['top_picks'] = {
+                'latest_round': top_picks_payload.get('latestRound'),
+                'generated_at': top_picks_payload.get('generatedAt'),
+                'path': os.path.abspath(top_picks_path),
+            }
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
