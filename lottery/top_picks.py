@@ -464,6 +464,7 @@ def generate_weekly_top_picks(
     payload = {
         'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'latestRound': latest_round,
+        'targetRound': (int(latest_round) + 1) if latest_round is not None else None,
         'carryoverContext': {
             'source_round': int(latest_draw[0]['회차']) if latest_draw else None,
             'carryover_numbers': sorted(carryover_numbers),

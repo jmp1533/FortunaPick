@@ -1083,10 +1083,10 @@ export default function Home() {
                       <div className="card-title-icon">
                         <Icons.Star />
                       </div>
-                      이번 주 종합 추천 TOP5
+                      다음 회차 예측 TOP5
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      기준 회차 {topPicksData.latestRound}
+                      예상 대상 {topPicksData.targetRound || (topPicksData.latestRound ? topPicksData.latestRound + 1 : '-') }회 / 분석 기준 {topPicksData.latestRound}회
                     </div>
                   </div>
                   <div className="result-list">
