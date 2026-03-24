@@ -441,14 +441,19 @@ def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, re
 
     existing_rounds = existing.get('rounds', [])
     existing_round_numbers = {int(item['round']) for item in existing_rounds}
-    available_round_numbers = [int(item['회차']) for item in all_draws_desc]
-    missing_rounds = [round_no for round_no in available_round_numbers if round_no not in existing_round_numbers]
+    existing_latest_round = max(existing_round_numbers) if existing_round_numbers else None
+    available_round_numbers = sorted(int(item['회차']) for item in all_draws_desc)
+
+    if existing_latest_round is None:
+        missing_rounds = available_round_numbers
+    else:
+        missing_rounds = [round_no for round_no in available_round_numbers if round_no > existing_latest_round]
 
     if not missing_rounds:
         return {
             'status': 'up_to_date',
             'latest_round': latest_round,
-            'existing_latest_round': max(existing_round_numbers) if existing_round_numbers else None,
+            'existing_latest_round': existing_latest_round,
             'missing_rounds': [],
             'report': existing,
         }
@@ -526,6 +531,7 @@ def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, re
     return {
         'status': 'updated',
         'latest_round': latest_round,
+        'existing_latest_round': existing_latest_round,
         'missing_rounds': missing_rounds,
         'applied_rounds': [int(item['round']) for item in new_round_entries],
         'report': existing,
