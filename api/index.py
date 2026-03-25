@@ -10,8 +10,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from http.server import BaseHTTPRequestHandler
 import json
 from lottery.analyzer import LotteryAnalyzer
-from lottery.engine import build_overdue_numbers, recommend_with_constraints
+from lottery.engine import recommend_with_constraints
 from lottery.score_presets import SCORE_PRESETS
+from lottery.top_picks import DEFAULT_EXTRACT_MAX_CARRYOVER, EXTRACT_SELECTION_POLICY, get_current_draw_context
 
 RECOMMENDATION_MODES = {
     'stable': 'balanced_distribution',
@@ -54,13 +55,13 @@ class handler(BaseHTTPRequestHandler):
                 raise ValueError('Invalid score preset')
 
             analyzer = get_analyzer()
-            analysis = analyzer.get_analysis_results()
-            last_seen = analysis.get('last_seen_draws_ago', {})
-            overdue_numbers = build_overdue_numbers(last_seen, threshold=25)
+            context = get_current_draw_context(analyzer)
+            analysis = context['analysis']
+            overdue_numbers = context['overdue_numbers']
+            latest_draw = context['latest_draw']
+            carryover_numbers = context['carryover_numbers']
+            bonus_carryover_numbers = context['bonus_carryover_numbers']
             carryover_latest = analysis.get('carryover_metrics', {}).get('latest', {})
-            latest_draw = analyzer.get_latest_draws(count=1)
-            carryover_numbers = set(latest_draw[0]['winning_numbers']) if latest_draw else set()
-            bonus_carryover_numbers = {int(latest_draw[0]['bonus_number'])} if latest_draw else set()
 
             response = recommend_with_constraints(
                 fixed_nums=fixed_nums,
@@ -70,7 +71,9 @@ class handler(BaseHTTPRequestHandler):
                 overdue_numbers=overdue_numbers,
                 carryover_numbers=carryover_numbers,
                 bonus_carryover_numbers=bonus_carryover_numbers,
+                analysis=analysis,
                 score_config=SCORE_PRESETS[score_preset],
+                max_carryover_count=DEFAULT_EXTRACT_MAX_CARRYOVER,
             )
             response['recommendation_mode'] = recommendation_mode
             response['carryover_metrics'] = {
@@ -80,6 +83,7 @@ class handler(BaseHTTPRequestHandler):
                 'latest_observed_repeat': carryover_latest,
             }
             response['score_preset'] = score_preset
+            response['selection_policy'] = EXTRACT_SELECTION_POLICY
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

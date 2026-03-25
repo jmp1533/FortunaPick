@@ -1,0 +1,102 @@
+{
+  "stable": {
+    "30": {
+      "tested_rounds": 30,
+      "average_best_hit": 2.2667,
+      "rounds_with_3_plus": 12,
+      "rounds_with_4_plus": 0,
+      "rounds_with_5_plus": 0,
+      "rounds_with_bonus_match": 23,
+      "baseline_average_best_hit": 1.4,
+      "baseline_rounds_with_3_plus": 2,
+      "baseline_rounds_with_4_plus": 0,
+      "baseline_rounds_with_bonus_match": 8,
+      "latest_round_span": [
+        1187,
+        1216
+      ]
+    },
+    "50": {
+      "tested_rounds": 50,
+      "average_best_hit": 2.22,
+      "rounds_with_3_plus": 17,
+      "rounds_with_4_plus": 0,
+      "rounds_with_5_plus": 0,
+      "rounds_with_bonus_match": 39,
+      "baseline_average_best_hit": 1.18,
+      "baseline_rounds_with_3_plus": 2,
+      "baseline_rounds_with_4_plus": 0,
+      "baseline_rounds_with_bonus_match": 15,
+      "latest_round_span": [
+        1167,
+        1216
+      ]
+    },
+    "100": {
+      "tested_rounds": 100,
+      "average_best_hit": 1.98,
+      "rounds_with_3_plus": 25,
+      "rounds_with_4_plus": 0,
+      "rounds_with_5_plus": 0,
+      "rounds_with_bonus_match": 65,
+      "baseline_average_best_hit": 1.27,
+      "baseline_rounds_with_3_plus": 7,
+      "baseline_rounds_with_4_plus": 1,
+      "baseline_rounds_with_bonus_match": 35,
+      "latest_round_span": [
+        1117,
+        1216
+      ]
+    }
+  },
+  "high_hit": {
+    "30": {
+      "tested_rounds": 30,
+      "average_best_hit": 2.2333,
+      "rounds_with_3_plus": 7,
+      "rounds_with_4_plus": 2,
+      "rounds_with_5_plus": 1,
+      "rounds_with_bonus_match": 20,
+      "baseline_average_best_hit": 1.4,
+      "baseline_rounds_with_3_plus": 2,
+      "baseline_rounds_with_4_plus": 0,
+      "baseline_rounds_with_bonus_match": 8,
+      "latest_round_span": [
+        1187,
+        1216
+      ]
+    },
+    "50": {
+      "tested_rounds": 50,
+      "average_best_hit": 2.14,
+      "rounds_with_3_plus": 12,
+      "rounds_with_4_plus": 2,
+      "rounds_with_5_plus": 1,
+      "rounds_with_bonus_match": 34,
+      "baseline_average_best_hit": 1.18,
+      "baseline_rounds_with_3_plus": 2,
+      "baseline_rounds_with_4_plus": 0,
+      "baseline_rounds_with_bonus_match": 15,
+      "latest_round_span": [
+        1167,
+        1216
+      ]
+    },
+    "100": {
+      "tested_rounds": 100,
+      "average_best_hit": 1.91,
+      "rounds_with_3_plus": 18,
+      "rounds_with_4_plus": 2,
+      "rounds_with_5_plus": 1,
+      "rounds_with_bonus_match": 63,
+      "baseline_average_best_hit": 1.27,
+      "baseline_rounds_with_3_plus": 7,
+      "baseline_rounds_with_4_plus": 1,
+      "baseline_rounds_with_bonus_match": 35,
+      "latest_round_span": [
+        1117,
+        1216
+      ]
+    }
+  }
+}

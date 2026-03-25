@@ -19,6 +19,7 @@ from lottery.analyzer import LotteryAnalyzer
 from lottery.engine import build_or_load_repository, recommend_from_repository, normalize_rules, cache_key_for_rules, normalize_score_config
 from lottery.score_presets import SCORE_PRESETS
 from lottery.paths import get_checkpoint_dir, get_report_path
+from lottery.top_picks import DEFAULT_EXTRACT_MAX_CARRYOVER
 
 MILESTONE_KEYS = [
     'had_3_plus', 'had_4_plus', 'had_5_plus', 'had_6',
@@ -106,6 +107,62 @@ class SlidingWindowStats:
 
     def snapshot_draws(self):
         return list(self.draws)
+
+
+def build_analysis_snapshot(window_draws, previous_draw=None):
+    last_seen = {num: -1 for num in range(1, 46)}
+    reversed_draws = list(reversed(window_draws))
+    for idx, draw in enumerate(reversed_draws):
+        for num in draw['winning_numbers']:
+            if last_seen[num] == -1:
+                last_seen[num] = idx
+
+    frequency_windows = {}
+    for window in (10, 30, 50, 100):
+        counter = Counter()
+        for draw in window_draws[-window:]:
+            counter.update(draw['winning_numbers'])
+        frequency_windows[str(window)] = {num: int(counter.get(num, 0)) for num in range(1, 46)}
+
+    carryover_numbers = previous_draw['winning_numbers'] if previous_draw else []
+    bonus_carryover_numbers = [int(previous_draw['bonus_number'])] if previous_draw else []
+
+    hot_cold_profile = {}
+    number_features = {}
+    for num in range(1, 46):
+        score = (int(frequency_windows['10'].get(num, 0)) * 3) + int(frequency_windows['30'].get(num, 0))
+        if score >= 12:
+            label = 'hot'
+        elif score <= 3:
+            label = 'cold'
+        else:
+            label = 'neutral'
+        hot_cold_profile[num] = {'score': score, 'label': label}
+        number_features[num] = {
+            'number': num,
+            'freq_10': int(frequency_windows['10'].get(num, 0)),
+            'freq_30': int(frequency_windows['30'].get(num, 0)),
+            'freq_50': int(frequency_windows['50'].get(num, 0)),
+            'freq_100': int(frequency_windows['100'].get(num, 0)),
+            'last_seen': int(last_seen.get(num, -1)),
+            'is_carryover': num in carryover_numbers,
+            'is_bonus_carryover': num in bonus_carryover_numbers,
+            'hot_cold_label': label,
+            'hot_score': score,
+        }
+
+    return {
+        'last_seen_draws_ago': last_seen,
+        'number_frequency_windows': frequency_windows,
+        'hot_cold_profile': hot_cold_profile,
+        'number_features': number_features,
+        'carryover_metrics': {
+            'latest': {
+                'carryover_numbers': carryover_numbers,
+                'bonus_carryover_numbers': bonus_carryover_numbers,
+            }
+        },
+    }
 
 
 def evaluate_round(recommendations, target_numbers, bonus_number=None):
@@ -309,13 +366,16 @@ def execute_backtest_pass(repository, chronological, targets, recommend_count, s
         previous_draw = chronological[target_start + relative_idx - 1] if (target_start + relative_idx - 1) >= 0 else None
         carryover_numbers = set(previous_draw['winning_numbers']) if previous_draw else set()
         bonus_carryover_numbers = {int(previous_draw['bonus_number'])} if previous_draw else set()
+        analysis_snapshot = build_analysis_snapshot(window_stats.snapshot_draws(), previous_draw=previous_draw)
         recommendations = recommend_from_repository(
             repository,
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis_snapshot,
             count=recommend_count,
             seed=seed_base + target['회차'],
+            max_carryover_count=DEFAULT_EXTRACT_MAX_CARRYOVER,
         )
         baseline_recommendations = window_stats.baseline_recommendations(recommend_count=recommend_count)
 
@@ -476,13 +536,16 @@ def update_backtest_report_incrementally(report_path, min_ac=5, filters=None, re
         previous_draw = chronological[target_index - 1] if target_index > 0 else None
         carryover_numbers = set(previous_draw['winning_numbers']) if previous_draw else set()
         bonus_carryover_numbers = {int(previous_draw['bonus_number'])} if previous_draw else set()
+        analysis_snapshot = build_analysis_snapshot(window_stats.snapshot_draws(), previous_draw=previous_draw)
         recommendations = recommend_from_repository(
             repository,
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis_snapshot,
             count=recommend_count,
             seed=seed_base + target_round,
+            max_carryover_count=DEFAULT_EXTRACT_MAX_CARRYOVER,
         )
         baseline_recommendations = window_stats.baseline_recommendations(recommend_count=recommend_count)
         evaluation = evaluate_round(recommendations, target['winning_numbers'], target['bonus_number'])

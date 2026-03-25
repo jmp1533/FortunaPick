@@ -35,6 +35,22 @@ DEFAULT_SCORE_CONFIG = {
     'overdue_weight': 15,
     'carryover_weight': 12,
     'bonus_carryover_weight': 4,
+    'frequency_window_weights': {
+        10: 3,
+        30: 2,
+        50: 1,
+        100: 1,
+    },
+    'last_seen_weights': [
+        {'min': 8, 'max': 15, 'score': 2},
+        {'min': 16, 'max': 24, 'score': 5},
+        {'min': 25, 'max': 99, 'score': 8},
+    ],
+    'last_seen_default_score': 0,
+    'hot_score_weights': {
+        'hot': 1,
+        'cold': 2,
+    },
     'carryover_count_scores': {
         1: 12,
         2: 18,
@@ -105,6 +121,10 @@ def normalize_score_config(score_config: Dict | None = None) -> Dict:
         'overdue_weight': DEFAULT_SCORE_CONFIG['overdue_weight'],
         'carryover_weight': DEFAULT_SCORE_CONFIG['carryover_weight'],
         'bonus_carryover_weight': DEFAULT_SCORE_CONFIG['bonus_carryover_weight'],
+        'frequency_window_weights': dict(DEFAULT_SCORE_CONFIG['frequency_window_weights']),
+        'last_seen_weights': [dict(item) for item in DEFAULT_SCORE_CONFIG['last_seen_weights']],
+        'last_seen_default_score': DEFAULT_SCORE_CONFIG['last_seen_default_score'],
+        'hot_score_weights': dict(DEFAULT_SCORE_CONFIG['hot_score_weights']),
         'carryover_count_scores': dict(DEFAULT_SCORE_CONFIG['carryover_count_scores']),
         'carryover_default_score': DEFAULT_SCORE_CONFIG['carryover_default_score'],
         'bonus_carryover_count_scores': dict(DEFAULT_SCORE_CONFIG['bonus_carryover_count_scores']),
@@ -124,9 +144,9 @@ def normalize_score_config(score_config: Dict | None = None) -> Dict:
         return merged
 
     for key, value in score_config.items():
-        if key in ['odd_count_scores', 'high_count_scores', 'max_concentration_scores']:
-            merged[key] = {int(k): int(v) for k, v in value.items()}
-        elif key in ['ac_ranges', 'sum_ranges']:
+        if key in ['odd_count_scores', 'high_count_scores', 'max_concentration_scores', 'carryover_count_scores', 'bonus_carryover_count_scores', 'frequency_window_weights', 'hot_score_weights']:
+            merged[key] = {int(k) if str(k).isdigit() else str(k): int(v) for k, v in value.items()}
+        elif key in ['ac_ranges', 'sum_ranges', 'last_seen_weights']:
             merged[key] = [dict(item) for item in value]
         else:
             merged[key] = value
@@ -260,37 +280,129 @@ def _score_from_map(value: int, score_map: Dict[int, int], default_score: int) -
     return int(score_map.get(value, default_score))
 
 
-def score_combination(
+def build_number_feature_map(analysis: Dict | None = None) -> Dict[int, Dict]:
+    analysis = analysis or {}
+    existing = analysis.get('number_features', {}) or {}
+    if existing:
+        normalized = {}
+        for raw_num, raw_item in existing.items():
+            num = int(raw_num)
+            item = dict(raw_item or {})
+            normalized[num] = {
+                'number': num,
+                'freq_10': int(item.get('freq_10', 0)),
+                'freq_30': int(item.get('freq_30', 0)),
+                'freq_50': int(item.get('freq_50', 0)),
+                'freq_100': int(item.get('freq_100', 0)),
+                'last_seen': int(item.get('last_seen', -1)),
+                'is_carryover': bool(item.get('is_carryover', False)),
+                'is_bonus_carryover': bool(item.get('is_bonus_carryover', False)),
+                'hot_cold_label': str(item.get('hot_cold_label', 'neutral')),
+                'hot_score': int(item.get('hot_score', item.get('hot_cold_score', 0))),
+            }
+        return normalized
+
+    frequency_windows = analysis.get('number_frequency_windows', {})
+    last_seen = analysis.get('last_seen_draws_ago', {})
+    carryover_latest = analysis.get('carryover_metrics', {}).get('latest', {})
+    hot_cold = analysis.get('hot_cold_profile', {})
+
+    features = {}
+    carryover_numbers = set(carryover_latest.get('carryover_numbers', []))
+    bonus_carryover_numbers = set(carryover_latest.get('bonus_carryover_numbers', []))
+
+    for num in range(1, 46):
+        item = {
+            'number': num,
+            'freq_10': int((frequency_windows.get('10') or frequency_windows.get(10) or {}).get(num, 0)),
+            'freq_30': int((frequency_windows.get('30') or frequency_windows.get(30) or {}).get(num, 0)),
+            'freq_50': int((frequency_windows.get('50') or frequency_windows.get(50) or {}).get(num, 0)),
+            'freq_100': int((frequency_windows.get('100') or frequency_windows.get(100) or {}).get(num, 0)),
+            'last_seen': int(last_seen.get(num, -1)),
+            'is_carryover': num in carryover_numbers,
+            'is_bonus_carryover': num in bonus_carryover_numbers,
+            'hot_cold_label': 'neutral',
+            'hot_score': 0,
+        }
+        profile = hot_cold.get(str(num)) or hot_cold.get(num) or {}
+        if profile:
+            item['hot_cold_label'] = str(profile.get('label', 'neutral'))
+            item['hot_score'] = int(profile.get('score', 0))
+        features[num] = item
+    return features
+
+
+def score_number_signals(
     combo: Sequence[int],
     overdue_numbers: Set[int] | None = None,
     carryover_numbers: Set[int] | None = None,
     bonus_carryover_numbers: Set[int] | None = None,
+    analysis: Dict | None = None,
     score_config: Dict | None = None,
-) -> int:
+) -> Dict:
     overdue_numbers = overdue_numbers or set()
     carryover_numbers = carryover_numbers or set()
     bonus_carryover_numbers = bonus_carryover_numbers or set()
     config = normalize_score_config(score_config)
-    score = 0
+    number_features = build_number_feature_map(analysis)
 
-    overdue_count = sum(1 for n in combo if n in overdue_numbers)
-    carryover_count = sum(1 for n in combo if n in carryover_numbers)
-    bonus_carryover_count = sum(1 for n in combo if n in bonus_carryover_numbers)
-    score += overdue_count * int(config['overdue_weight'])
-    score += carryover_count * int(config['carryover_weight'])
-    score += bonus_carryover_count * int(config['bonus_carryover_weight'])
+    breakdown = {
+        'overdue': 0,
+        'frequency': 0,
+        'last_seen': 0,
+        'hot_cold': 0,
+        'carryover': 0,
+        'bonus_carryover': 0,
+    }
+
+    for n in combo:
+        feat = number_features.get(int(n), {})
+        if n in overdue_numbers:
+            breakdown['overdue'] += int(config['overdue_weight'])
+        if n in carryover_numbers:
+            breakdown['carryover'] += int(config['carryover_weight'])
+        if n in bonus_carryover_numbers:
+            breakdown['bonus_carryover'] += int(config['bonus_carryover_weight'])
+
+        for window, weight in config.get('frequency_window_weights', {}).items():
+            key = f'freq_{int(window)}'
+            breakdown['frequency'] += int(feat.get(key, 0)) * int(weight)
+
+        breakdown['last_seen'] += _score_from_ranges(
+            int(feat.get('last_seen', -1)),
+            config.get('last_seen_weights', []),
+            int(config.get('last_seen_default_score', 0)),
+        )
+
+        label = str(feat.get('hot_cold_label', 'neutral'))
+        breakdown['hot_cold'] += int(config.get('hot_score_weights', {}).get(label, 0))
+
+    breakdown['count_adjustments'] = _dynamic_signal_bonus_from_counts(
+        sum(1 for n in combo if n in overdue_numbers),
+        sum(1 for n in combo if n in carryover_numbers),
+        sum(1 for n in combo if n in bonus_carryover_numbers),
+        config,
+    ) - breakdown['overdue'] - breakdown['carryover'] - breakdown['bonus_carryover']
+
+    breakdown['total'] = sum(int(v) for v in breakdown.values() if isinstance(v, int))
+    return breakdown
+
+
+def score_combo_signals(combo: Sequence[int], score_config: Dict | None = None) -> Dict:
+    config = normalize_score_config(score_config)
+    breakdown = {}
 
     ac = calculate_ac(combo)
-    score += _score_from_ranges(ac, config['ac_ranges'], config['ac_default_score'])
+    breakdown['ac'] = _score_from_ranges(ac, config['ac_ranges'], config['ac_default_score'])
 
     odd_count = get_odd_count(combo)
-    score += _score_from_map(odd_count, config['odd_count_scores'], config['odd_default_score'])
+    breakdown['odd_even'] = _score_from_map(odd_count, config['odd_count_scores'], config['odd_default_score'])
 
     high_count = get_high_count(combo)
-    score += _score_from_map(high_count, config['high_count_scores'], config['high_default_score'])
+    breakdown['high_low'] = _score_from_map(high_count, config['high_count_scores'], config['high_default_score'])
 
     total = get_sum(combo)
-    score += _score_from_ranges(total, config['sum_ranges'], config['sum_default_score'])
+    breakdown['sum'] = _score_from_ranges(total, config['sum_ranges'], config['sum_default_score'])
 
     max_concentration = max(_get_decade_counts(combo))
     concentration_score = config['concentration_default_score']
@@ -298,13 +410,60 @@ def score_combination(
         if max_concentration <= threshold:
             concentration_score = threshold_score
             break
-    score += int(concentration_score)
+    breakdown['decade_balance'] = int(concentration_score)
+    breakdown['total'] = sum(int(v) for v in breakdown.values())
+    return breakdown
 
-    return score
+
+def _dynamic_signal_bonus_from_counts(
+    overdue_count: int,
+    carryover_count: int,
+    bonus_carryover_count: int,
+    config: Dict,
+) -> int:
+    score = overdue_count * int(config['overdue_weight'])
+    if config.get('carryover_count_scores'):
+        score += _score_from_map(carryover_count, config['carryover_count_scores'], int(config.get('carryover_default_score', 0)))
+    else:
+        score += carryover_count * int(config['carryover_weight'])
+    if config.get('bonus_carryover_count_scores'):
+        score += _score_from_map(bonus_carryover_count, config['bonus_carryover_count_scores'], int(config.get('bonus_carryover_default_score', 0)))
+    else:
+        score += bonus_carryover_count * int(config['bonus_carryover_weight'])
+    return int(score)
+
+
+def score_combination(
+    combo: Sequence[int],
+    overdue_numbers: Set[int] | None = None,
+    carryover_numbers: Set[int] | None = None,
+    bonus_carryover_numbers: Set[int] | None = None,
+    analysis: Dict | None = None,
+    score_config: Dict | None = None,
+    return_breakdown: bool = False,
+) -> int | Dict:
+    config = normalize_score_config(score_config)
+    number_signal = score_number_signals(
+        combo,
+        overdue_numbers=overdue_numbers,
+        carryover_numbers=carryover_numbers,
+        bonus_carryover_numbers=bonus_carryover_numbers,
+        analysis=analysis,
+        score_config=config,
+    )
+    combo_signal = score_combo_signals(combo, score_config=config)
+    total_score = int(number_signal['total']) + int(combo_signal['total'])
+    if return_breakdown:
+        return {
+            'total': total_score,
+            'number_signal': number_signal,
+            'combo_signal': combo_signal,
+        }
+    return total_score
 
 
 def compute_static_score(combo: Sequence[int], score_config: Dict | None = None) -> int:
-    return score_combination(combo, overdue_numbers=set(), score_config=score_config)
+    return int(score_combo_signals(combo, score_config=score_config)['total'])
 
 
 def cache_key_for_rules(rules: Dict) -> str:
@@ -368,8 +527,10 @@ def recommend_from_repository(
     overdue_numbers: Set[int] | None = None,
     carryover_numbers: Set[int] | None = None,
     bonus_carryover_numbers: Set[int] | None = None,
+    analysis: Dict | None = None,
     count: int = 10,
     seed: int | None = None,
+    max_carryover_count: int | None = None,
 ) -> List[Tuple[int, ...]]:
     overdue_numbers = overdue_numbers or set()
     carryover_numbers = carryover_numbers or set()
@@ -384,10 +545,22 @@ def recommend_from_repository(
 
     scored_entries = []
     for mask, static_score in repository.iter_entries():
-        overdue_bonus = ((mask & overdue_mask).bit_count() * int(config['overdue_weight'])) if overdue_mask else 0
-        carryover_bonus = ((mask & carryover_mask).bit_count() * int(config['carryover_weight'])) if carryover_mask else 0
-        bonus_carryover_bonus = ((mask & bonus_carryover_mask).bit_count() * int(config['bonus_carryover_weight'])) if bonus_carryover_mask else 0
-        total_score = static_score + overdue_bonus + carryover_bonus + bonus_carryover_bonus
+        overdue_count = (mask & overdue_mask).bit_count() if overdue_mask else 0
+        carryover_count = (mask & carryover_mask).bit_count() if carryover_mask else 0
+        bonus_carryover_count = (mask & bonus_carryover_mask).bit_count() if bonus_carryover_mask else 0
+        if max_carryover_count is not None and carryover_count > max_carryover_count:
+            continue
+        combo = mask_to_combo(mask)
+        number_breakdown = score_number_signals(
+            combo,
+            overdue_numbers=overdue_numbers,
+            carryover_numbers=carryover_numbers,
+            bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
+            score_config=config,
+        )
+        dynamic_bonus = int(number_breakdown['total'])
+        total_score = int(static_score) + dynamic_bonus
         scored_entries.append((total_score, mask))
 
     if not scored_entries:
@@ -433,9 +606,11 @@ def recommend_with_constraints(
     overdue_numbers: Set[int] | None = None,
     carryover_numbers: Set[int] | None = None,
     bonus_carryover_numbers: Set[int] | None = None,
+    analysis: Dict | None = None,
     count: int = 10,
     seed: int | None = None,
     score_config: Dict | None = None,
+    max_carryover_count: int | None = None,
 ):
     fixed_nums = sorted(set(fixed_nums or []))
     exclude_nums = sorted(set(exclude_nums or []))
@@ -454,6 +629,10 @@ def recommend_with_constraints(
     static_scores = []
     for additional in itertools.combinations(pool, needed):
         combo = tuple(sorted(fixed_nums + list(additional)))
+        if max_carryover_count is not None and carryover_numbers is not None:
+            carryover_count = sum(1 for n in combo if n in carryover_numbers)
+            if carryover_count > max_carryover_count:
+                continue
         if check_filters(combo, rules):
             valid_masks.append(combo_to_mask(combo))
             static_scores.append(compute_static_score(combo, rules.get('score_config')))
@@ -469,8 +648,10 @@ def recommend_with_constraints(
         overdue_numbers=overdue_numbers,
         carryover_numbers=carryover_numbers,
         bonus_carryover_numbers=bonus_carryover_numbers,
+        analysis=analysis,
         count=count,
         seed=seed,
+        max_carryover_count=max_carryover_count,
     )
     filtered_ratio = f"{(1 - len(valid_masks) / max(1, total_space)) * 100:.1f}%"
 
@@ -486,5 +667,6 @@ def recommend_with_constraints(
             'bonus_carryover_count': len(bonus_carryover_numbers),
             'filtered_ratio': filtered_ratio,
             'total_combination_space': total_space,
+            'max_carryover_count': max_carryover_count,
         }
     }

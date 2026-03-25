@@ -275,5 +275,27 @@
         "홀짝 균형"
       ]
     }
-  ]
+  ],
+  "selectionPolicy": {
+    "top_picks": {
+      "goal": "strict_top_ranking",
+      "description": "공통 점수 엔진을 유지하되 상위권 조합을 엄격하게 추려 공개용 TOP만 남긴다.",
+      "max_overlap": 3,
+      "max_number_frequency": 1,
+      "max_sum_band_frequency": 2,
+      "max_carryover_count": 2
+    },
+    "extract": {
+      "goal": "constraint_aware_recommendation",
+      "description": "공통 점수 엔진을 유지하되 사용자가 고정/제외/필터 조건을 준 상태에서 넓은 추천 후보를 반환한다.",
+      "max_carryover_count": 2,
+      "diversification": "minimal"
+    }
+  },
+  "carryoverPolicy": {
+    "top_picks_max_carryover": 2,
+    "extract_max_carryover": 2,
+    "bonus_carryover_role": "weak_auxiliary",
+    "main_carryover_role": "important_but_capped"
+  }
 }

@@ -10,8 +10,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from http.server import BaseHTTPRequestHandler
 import json
 from lottery.top_picks import TOP_PICKS_FILENAME
+from lottery.paths import get_report_path
 
-TOP_PICKS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'lottery', TOP_PICKS_FILENAME))
+TOP_PICKS_PATH = get_report_path(TOP_PICKS_FILENAME)
 
 
 class handler(BaseHTTPRequestHandler):

@@ -10,6 +10,9 @@ except Exception:
     pd = None
 
 
+FREQUENCY_WINDOWS = (10, 30, 50, 100)
+
+
 class LotteryAnalyzer:
     def __init__(self, excel_filename='winningNumbers.xlsx'):
         self.excel_path = os.path.join(os.path.dirname(__file__), excel_filename)
@@ -128,8 +131,10 @@ class LotteryAnalyzer:
         if self.df.empty:
             return
 
+        draws_desc = self.get_all_draws()
         all_numbers = [num for sublist in self.df['winning_numbers'] for num in sublist]
         self.analysis_results['number_frequencies'] = Counter(all_numbers)
+        self.analysis_results['number_frequency_windows'] = self._build_frequency_windows(draws_desc)
 
         recent_draws_count = min(100, len(self.df))
         recent_numbers = [num for sublist in self.df.head(recent_draws_count)['winning_numbers'] for num in sublist]
@@ -153,6 +158,61 @@ class LotteryAnalyzer:
         self.analysis_results['last_seen_draws_ago'] = last_seen
         self.analysis_results['group_concentration_distribution'] = Counter(self.df['winning_numbers'].apply(self._get_group_concentration_key))
         self.analysis_results['carryover_metrics'] = self._build_carryover_metrics()
+        self.analysis_results['hot_cold_profile'] = self._build_hot_cold_profile()
+        self.analysis_results['number_features'] = self._build_number_features()
+
+    def _build_frequency_windows(self, draws_desc):
+        windows = {}
+        for window in FREQUENCY_WINDOWS:
+            recent_draws = draws_desc[:min(window, len(draws_desc))]
+            counter = Counter()
+            for draw in recent_draws:
+                counter.update(draw['winning_numbers'])
+            windows[str(window)] = {num: int(counter.get(num, 0)) for num in range(1, 46)}
+        return windows
+
+    def _build_hot_cold_profile(self):
+        freq_windows = self.analysis_results.get('number_frequency_windows', {})
+        freq10 = freq_windows.get('10', {})
+        freq30 = freq_windows.get('30', {})
+        profile = {}
+        for num in range(1, 46):
+            score = (int(freq10.get(num, 0)) * 3) + int(freq30.get(num, 0))
+            if score >= 12:
+                label = 'hot'
+            elif score <= 3:
+                label = 'cold'
+            else:
+                label = 'neutral'
+            profile[num] = {
+                'score': score,
+                'label': label,
+            }
+        return profile
+
+    def _build_number_features(self):
+        carryover_latest = self.analysis_results.get('carryover_metrics', {}).get('latest', {})
+        freq_windows = self.analysis_results.get('number_frequency_windows', {})
+        hot_cold = self.analysis_results.get('hot_cold_profile', {})
+        last_seen = self.analysis_results.get('last_seen_draws_ago', {})
+        carryover_numbers = set(carryover_latest.get('carryover_numbers', []))
+        bonus_carryover_numbers = set(carryover_latest.get('bonus_carryover_numbers', []))
+
+        features = {}
+        for num in range(1, 46):
+            features[num] = {
+                'number': num,
+                'freq_10': int(freq_windows.get('10', {}).get(num, 0)),
+                'freq_30': int(freq_windows.get('30', {}).get(num, 0)),
+                'freq_50': int(freq_windows.get('50', {}).get(num, 0)),
+                'freq_100': int(freq_windows.get('100', {}).get(num, 0)),
+                'last_seen': int(last_seen.get(num, -1)),
+                'is_carryover': num in carryover_numbers,
+                'is_bonus_carryover': num in bonus_carryover_numbers,
+                'hot_cold_score': int(hot_cold.get(num, {}).get('score', 0)),
+                'hot_cold_label': str(hot_cold.get(num, {}).get('label', 'neutral')),
+            }
+        return features
 
     def _calculate_ac(self, numbers):
         nums = sorted(list(numbers))

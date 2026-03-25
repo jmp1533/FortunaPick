@@ -1085,8 +1085,9 @@ export default function Home() {
                       </div>
                       다음 회차 예측 TOP5
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      예상 대상 {topPicksData.targetRound || (topPicksData.latestRound ? topPicksData.latestRound + 1 : '-') }회 / 분석 기준 {topPicksData.latestRound}회
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                      <div>예상 대상 {topPicksData.targetRound || (topPicksData.latestRound ? topPicksData.latestRound + 1 : '-') }회 / 분석 기준 {topPicksData.latestRound}회</div>
+                      <div>공통 점수 기반 상위권 엄선 TOP</div>
                     </div>
                   </div>
                   <div className="result-list">
@@ -1187,6 +1188,7 @@ export default function Home() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
                           <Icons.Sparkle />
                           {RECOMMENDATION_MODES[result?.recommendation_mode || recommendationMode]?.name || '안정형'}
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· 조건 반영형 추천</span>
                         </div>
                       </div>
                       <div className="result-list">

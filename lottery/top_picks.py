@@ -26,9 +26,40 @@ DEFAULT_BUCKET_SIZE = 12000
 DEFAULT_COMPOSITE_LIMIT = 25000
 DEFAULT_MODE_BUCKET_SIZE = 15000
 DEFAULT_MAX_NUMBER_FREQUENCY = 2
-DEFAULT_WEEKLY_MAX_CARRYOVER = 2
-DEFAULT_STABLE_MAX_CARRYOVER = 2
-DEFAULT_HIGH_HIT_MAX_CARRYOVER = 2
+DEFAULT_TOP_PICKS_MAX_CARRYOVER = 2
+DEFAULT_EXTRACT_MAX_CARRYOVER = 2
+
+TOP_SELECTION_POLICY = {
+    'goal': 'strict_top_ranking',
+    'description': '공통 점수 엔진을 유지하되 상위권 조합을 엄격하게 추려 공개용 TOP만 남긴다.',
+    'max_overlap': 3,
+    'max_number_frequency': 1,
+    'max_sum_band_frequency': 2,
+    'max_carryover_count': DEFAULT_TOP_PICKS_MAX_CARRYOVER,
+}
+
+EXTRACT_SELECTION_POLICY = {
+    'goal': 'constraint_aware_recommendation',
+    'description': '공통 점수 엔진을 유지하되 사용자가 고정/제외/필터 조건을 준 상태에서 넓은 추천 후보를 반환한다.',
+    'max_carryover_count': DEFAULT_EXTRACT_MAX_CARRYOVER,
+    'diversification': 'minimal',
+}
+
+
+def get_current_draw_context(analyzer: LotteryAnalyzer | None = None) -> Dict:
+    analyzer = analyzer or LotteryAnalyzer()
+    analysis = analyzer.get_analysis_results()
+    overdue_numbers = build_overdue_numbers(analysis.get('last_seen_draws_ago', {}), threshold=25)
+    latest_draw = analyzer.get_latest_draws(count=1)
+    carryover_numbers = set(latest_draw[0]['winning_numbers']) if latest_draw else set()
+    bonus_carryover_numbers = {int(latest_draw[0]['bonus_number'])} if latest_draw else set()
+    return {
+        'analysis': analysis,
+        'overdue_numbers': overdue_numbers,
+        'carryover_numbers': carryover_numbers,
+        'bonus_carryover_numbers': bonus_carryover_numbers,
+        'latest_draw': latest_draw,
+    }
 
 
 def combo_overlap(a: Sequence[int], b: Sequence[int]) -> int:
@@ -186,6 +217,7 @@ def push_topk(heap, score: float, mask: int, k: int):
 
 def collect_candidate_masks(
     repository,
+    analysis: Dict,
     overdue_numbers: set[int],
     carryover_numbers: set[int],
     bonus_carryover_numbers: set[int],
@@ -194,10 +226,6 @@ def collect_candidate_masks(
     bucket_size: int,
     max_carryover_count: int | None = None,
 ):
-    overdue_mask = 0
-    for n in overdue_numbers:
-        overdue_mask |= 1 << (n - 1)
-
     stable_heap = []
     high_heap = []
     neutral_heap = []
@@ -213,6 +241,7 @@ def collect_candidate_masks(
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
             score_config=stable_rules['score_config'],
         )
         high_score = score_combination(
@@ -220,6 +249,7 @@ def collect_candidate_masks(
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
             score_config=high_rules['score_config'],
         )
         neutral_score = stable_score + high_score
@@ -236,6 +266,7 @@ def collect_candidate_masks(
 
 def build_composite_candidates(
     candidate_masks: set[int],
+    analysis: Dict,
     overdue_numbers: set[int],
     carryover_numbers: set[int],
     bonus_carryover_numbers: set[int],
@@ -250,6 +281,7 @@ def build_composite_candidates(
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
             score_config=stable_rules['score_config'],
         )
         high_score = score_combination(
@@ -257,6 +289,7 @@ def build_composite_candidates(
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
             score_config=high_rules['score_config'],
         )
 
@@ -375,6 +408,30 @@ def select_diversified_top_picks(
         for candidate in candidates:
             if candidate in selected:
                 continue
+            if _can_add_candidate(
+                candidate,
+                selected,
+                number_usage,
+                sum_band_usage,
+                max_overlap=5,
+                max_number_frequency=max_number_frequency + 1,
+                max_sum_band_frequency=max_sum_band_frequency + 1,
+                carryover_numbers=carryover_numbers,
+                max_carryover_count=max_carryover_count,
+            ):
+                selected.append(candidate)
+                for n in candidate['combo']:
+                    number_usage[n] = number_usage.get(n, 0) + 1
+                profile = candidate.get('profile') or classify_profile(candidate['combo'])
+                sum_band = str(profile.get('sum_band', 'mid'))
+                sum_band_usage[sum_band] = sum_band_usage.get(sum_band, 0) + 1
+            if len(selected) >= target_count:
+                break
+
+    if len(selected) < target_count:
+        for candidate in candidates:
+            if candidate in selected:
+                continue
             combo = candidate['combo']
             if carryover_numbers is not None and max_carryover_count is not None:
                 carryover_count = len(set(combo) & set(carryover_numbers))
@@ -392,35 +449,33 @@ def build_mode_top_picks(
     top_count: int = DEFAULT_TOP_COUNT,
     min_ac: int = 5,
     filters: Dict | None = None,
-    bucket_size: int = DEFAULT_MODE_BUCKET_SIZE,
 ):
     analyzer = LotteryAnalyzer()
-    analysis = analyzer.get_analysis_results()
-    overdue_numbers = build_overdue_numbers(analysis.get('last_seen_draws_ago', {}), threshold=25)
-    latest_draw = analyzer.get_latest_draws(count=1)
-    carryover_numbers = set(latest_draw[0]['winning_numbers']) if latest_draw else set()
-    bonus_carryover_numbers = {int(latest_draw[0]['bonus_number'])} if latest_draw else set()
+    context = get_current_draw_context(analyzer)
+    analysis = context['analysis']
+    overdue_numbers = context['overdue_numbers']
+    carryover_numbers = context['carryover_numbers']
+    bonus_carryover_numbers = context['bonus_carryover_numbers']
 
     preset_name = 'balanced_distribution' if mode == 'stable' else 'sum_relaxed'
     rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=SCORE_PRESETS[preset_name])
     repository = build_or_load_repository(rules, force_rebuild=False)
 
-    max_carryover = DEFAULT_STABLE_MAX_CARRYOVER if mode == 'stable' else DEFAULT_HIGH_HIT_MAX_CARRYOVER
-
     top_heap = []
     for mask, _ in repository.iter_entries():
         combo = mask_to_combo(mask)
         carryover_count = len(set(combo) & set(carryover_numbers))
-        if carryover_count > max_carryover:
+        if carryover_count > DEFAULT_TOP_PICKS_MAX_CARRYOVER:
             continue
         score = score_combination(
             combo,
             overdue_numbers=overdue_numbers,
             carryover_numbers=carryover_numbers,
             bonus_carryover_numbers=bonus_carryover_numbers,
+            analysis=analysis,
             score_config=rules['score_config'],
         )
-        push_topk(top_heap, float(score), mask, bucket_size)
+        push_topk(top_heap, float(score), mask, DEFAULT_MODE_BUCKET_SIZE)
 
     scored = []
     for score, mask in sorted(top_heap, key=lambda item: (item[0], item[1]), reverse=True):
@@ -439,15 +494,16 @@ def build_mode_top_picks(
             'profile': classify_profile(combo),
         })
 
-    max_carryover = DEFAULT_STABLE_MAX_CARRYOVER if mode == 'stable' else DEFAULT_HIGH_HIT_MAX_CARRYOVER
     return [
         {k: v for k, v in item.items() if k != 'profile'}
         for item in select_diversified_top_picks(
             scored,
             target_count=top_count,
-            max_overlap=4,
+            max_overlap=int(TOP_SELECTION_POLICY['max_overlap']),
+            max_number_frequency=int(TOP_SELECTION_POLICY['max_number_frequency']),
+            max_sum_band_frequency=int(TOP_SELECTION_POLICY['max_sum_band_frequency']),
             carryover_numbers=carryover_numbers,
-            max_carryover_count=max_carryover,
+            max_carryover_count=int(TOP_SELECTION_POLICY['max_carryover_count']),
         )
     ]
 
@@ -461,11 +517,12 @@ def generate_weekly_top_picks(
 ):
     analyzer = LotteryAnalyzer()
     latest_round = analyzer.get_latest_round_number()
-    analysis = analyzer.get_analysis_results()
-    overdue_numbers = build_overdue_numbers(analysis.get('last_seen_draws_ago', {}), threshold=25)
-    latest_draw = analyzer.get_latest_draws(count=1)
-    carryover_numbers = set(latest_draw[0]['winning_numbers']) if latest_draw else set()
-    bonus_carryover_numbers = {int(latest_draw[0]['bonus_number'])} if latest_draw else set()
+    context = get_current_draw_context(analyzer)
+    analysis = context['analysis']
+    overdue_numbers = context['overdue_numbers']
+    carryover_numbers = context['carryover_numbers']
+    bonus_carryover_numbers = context['bonus_carryover_numbers']
+    latest_draw = context['latest_draw']
 
     stable_rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=SCORE_PRESETS['balanced_distribution'])
     high_rules = normalize_rules(min_ac=min_ac, filters=filters, score_config=SCORE_PRESETS['sum_relaxed'])
@@ -473,16 +530,18 @@ def generate_weekly_top_picks(
 
     candidate_masks = collect_candidate_masks(
         repository,
+        analysis,
         overdue_numbers,
         carryover_numbers,
         bonus_carryover_numbers,
         stable_rules,
         high_rules,
         bucket_size=bucket_size,
-        max_carryover_count=DEFAULT_WEEKLY_MAX_CARRYOVER,
+        max_carryover_count=DEFAULT_TOP_PICKS_MAX_CARRYOVER,
     )
     composite_candidates = build_composite_candidates(
         candidate_masks,
+        analysis,
         overdue_numbers,
         carryover_numbers,
         bonus_carryover_numbers,
@@ -492,9 +551,11 @@ def generate_weekly_top_picks(
     weekly_top = select_diversified_top_picks(
         composite_candidates[:composite_limit],
         target_count=top_count,
-        max_overlap=4,
+        max_overlap=int(TOP_SELECTION_POLICY['max_overlap']),
+        max_number_frequency=int(TOP_SELECTION_POLICY['max_number_frequency']),
+        max_sum_band_frequency=int(TOP_SELECTION_POLICY['max_sum_band_frequency']),
         carryover_numbers=carryover_numbers,
-        max_carryover_count=DEFAULT_WEEKLY_MAX_CARRYOVER,
+        max_carryover_count=int(TOP_SELECTION_POLICY['max_carryover_count']),
     )
 
     stable_top = build_mode_top_picks('stable', top_count=top_count, min_ac=min_ac, filters=filters)
@@ -507,6 +568,16 @@ def generate_weekly_top_picks(
         'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'latestRound': latest_round,
         'targetRound': (int(latest_round) + 1) if latest_round is not None else None,
+        'selectionPolicy': {
+            'top_picks': TOP_SELECTION_POLICY,
+            'extract': EXTRACT_SELECTION_POLICY,
+        },
+        'carryoverPolicy': {
+            'top_picks_max_carryover': DEFAULT_TOP_PICKS_MAX_CARRYOVER,
+            'extract_max_carryover': DEFAULT_EXTRACT_MAX_CARRYOVER,
+            'bonus_carryover_role': 'weak_auxiliary',
+            'main_carryover_role': 'important_but_capped',
+        },
         'carryoverContext': {
             'source_round': int(latest_draw[0]['회차']) if latest_draw else None,
             'carryover_numbers': sorted(carryover_numbers),
