@@ -42,11 +42,16 @@ def main():
             'bonus_carryover_count': len(bonus_carryover_numbers),
         })
 
+    carryover_metrics = analyzer.get_analysis_results().get('carryover_metrics', {})
     payload = {
         'draw_count': len(chronological),
         'pair_count': len(rows),
         'repeat_distribution': dict(sorted(repeat_counter.items())),
+        'repeat_distribution_full': carryover_metrics.get('repeat_distribution_full', {}),
         'bonus_augmented_repeat_distribution': dict(sorted(bonus_aug_counter.items())),
+        'bonus_augmented_repeat_distribution_full': carryover_metrics.get('bonus_augmented_repeat_distribution_full', {}),
+        'carryover_count_score_table': carryover_metrics.get('carryover_count_score_table', {}),
+        'bonus_carryover_count_score_table': carryover_metrics.get('bonus_carryover_count_score_table', {}),
         'average_repeat_count': round(sum(item['carryover_count'] for item in rows) / len(rows), 4),
         'average_bonus_augmented_repeat_count': round(sum(item['carryover_count'] + item['bonus_carryover_count'] for item in rows) / len(rows), 4),
         'latest': rows[-1],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from lottery.analyzer import LotteryAnalyzer
 from lottery.engine import DEFAULT_SCORE_CONFIG, normalize_score_config
 
 
@@ -13,6 +14,18 @@ def deep_merge_score(base, override):
         else:
             merged[key] = value
     return normalize_score_config(merged)
+
+
+_ANALYZER = LotteryAnalyzer()
+_CARRYOVER_METRICS = _ANALYZER.get_analysis_results().get('carryover_metrics', {})
+_EMPIRICAL_CARRYOVER_SCORES = {
+    int(k): int(v)
+    for k, v in _CARRYOVER_METRICS.get('carryover_count_score_table', DEFAULT_SCORE_CONFIG['carryover_count_scores']).items()
+}
+_EMPIRICAL_BONUS_CARRYOVER_SCORES = {
+    int(k): int(v)
+    for k, v in _CARRYOVER_METRICS.get('bonus_carryover_count_score_table', DEFAULT_SCORE_CONFIG['bonus_carryover_count_scores']).items()
+}
 
 
 SCORE_PRESETS = {
@@ -48,17 +61,8 @@ SCORE_PRESETS = {
             'hot': 1,
             'cold': 2,
         },
-        'carryover_count_scores': {
-            1: 10,
-            2: 12,
-            3: -10,
-            4: -24,
-            5: -40,
-            6: -56,
-        },
-        'bonus_carryover_count_scores': {
-            1: 2,
-        },
+        'carryover_count_scores': _EMPIRICAL_CARRYOVER_SCORES,
+        'bonus_carryover_count_scores': _EMPIRICAL_BONUS_CARRYOVER_SCORES,
         'odd_count_scores': {
             3: 28,
             4: 24,
@@ -88,17 +92,8 @@ SCORE_PRESETS = {
             'hot': 1,
             'cold': 2,
         },
-        'carryover_count_scores': {
-            1: 12,
-            2: 14,
-            3: -8,
-            4: -22,
-            5: -34,
-            6: -50,
-        },
-        'bonus_carryover_count_scores': {
-            1: 3,
-        },
+        'carryover_count_scores': _EMPIRICAL_CARRYOVER_SCORES,
+        'bonus_carryover_count_scores': _EMPIRICAL_BONUS_CARRYOVER_SCORES,
         'sum_ranges': [
             {'min': 105, 'max': 175, 'score': 25},
             {'min': 95, 'max': 185, 'score': 15},

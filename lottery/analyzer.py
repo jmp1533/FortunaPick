@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import zipfile
@@ -11,6 +12,48 @@ except Exception:
 
 
 FREQUENCY_WINDOWS = (10, 30, 50, 100)
+CARRYOVER_COUNT_DOMAIN = tuple(range(0, 7))
+
+
+def build_empirical_count_distribution(counts, domain=None):
+    domain = tuple(domain or CARRYOVER_COUNT_DOMAIN)
+    counter = Counter(int(count) for count in counts)
+    total = sum(counter.values())
+    if total <= 0:
+        return {
+            'counts': {count: 0 for count in domain},
+            'ratios': {count: 0.0 for count in domain},
+            'total': 0,
+            'mode': 0,
+        }
+
+    normalized_counts = {count: int(counter.get(count, 0)) for count in domain}
+    ratios = {count: normalized_counts[count] / total for count in domain}
+    mode = max(domain, key=lambda count: (normalized_counts[count], -count))
+    return {
+        'counts': normalized_counts,
+        'ratios': ratios,
+        'total': int(total),
+        'mode': int(mode),
+    }
+
+
+def build_empirical_score_table(distribution, *, scale=8, smoothing=0.35, domain=None):
+    domain = tuple(domain or CARRYOVER_COUNT_DOMAIN)
+    counts = {int(count): int(value) for count, value in distribution.get('counts', {}).items() if int(count) in domain}
+    total = int(distribution.get('total', sum(counts.values())))
+    bucket_count = len(domain)
+    if total <= 0 or bucket_count == 0:
+        return {count: 0 for count in domain}
+
+    baseline_probability = 1 / bucket_count
+    smoothed_total = total + (bucket_count * smoothing)
+    score_table = {}
+    for count in domain:
+        smoothed_probability = (counts.get(count, 0) + smoothing) / smoothed_total
+        score = round(scale * math.log2(smoothed_probability / baseline_probability))
+        score_table[int(count)] = int(score)
+    return score_table
 
 
 class LotteryAnalyzer:
@@ -267,11 +310,16 @@ class LotteryAnalyzer:
         draws_desc = self.get_all_draws()
         chronological = list(reversed(draws_desc))
         if len(chronological) < 2:
+            empty_distribution = build_empirical_count_distribution([], domain=CARRYOVER_COUNT_DOMAIN)
             return {
                 'repeat_distribution': {},
+                'repeat_distribution_full': empty_distribution,
                 'bonus_augmented_repeat_distribution': {},
+                'bonus_augmented_repeat_distribution_full': empty_distribution,
                 'average_repeat_count': 0,
                 'average_bonus_augmented_repeat_count': 0,
+                'carryover_count_score_table': build_empirical_score_table(empty_distribution),
+                'bonus_carryover_count_score_table': build_empirical_score_table(empty_distribution, scale=4),
                 'latest': {
                     'previous_round': None,
                     'current_round': chronological[-1]['회차'] if chronological else None,
@@ -302,11 +350,19 @@ class LotteryAnalyzer:
             })
 
         latest_pair = per_round[-1]
+        repeat_distribution = build_empirical_count_distribution(repeat_counts, domain=CARRYOVER_COUNT_DOMAIN)
+        bonus_distribution = build_empirical_count_distribution(bonus_repeat_counts, domain=CARRYOVER_COUNT_DOMAIN)
+        carryover_score_table = build_empirical_score_table(repeat_distribution)
+        bonus_carryover_score_table = build_empirical_score_table(bonus_distribution, scale=4)
         return {
             'repeat_distribution': dict(sorted(Counter(repeat_counts).items())),
+            'repeat_distribution_full': repeat_distribution,
             'bonus_augmented_repeat_distribution': dict(sorted(Counter(bonus_repeat_counts).items())),
+            'bonus_augmented_repeat_distribution_full': bonus_distribution,
             'average_repeat_count': sum(repeat_counts) / len(repeat_counts),
             'average_bonus_augmented_repeat_count': sum(bonus_repeat_counts) / len(bonus_repeat_counts),
+            'carryover_count_score_table': carryover_score_table,
+            'bonus_carryover_count_score_table': bonus_carryover_score_table,
             'latest': latest_pair,
             'recent_pairs': per_round[-10:],
         }
