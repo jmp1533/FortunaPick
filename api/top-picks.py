@@ -13,6 +13,7 @@ from lottery.top_picks import TOP_PICKS_FILENAME
 from lottery.paths import get_report_path
 
 TOP_PICKS_PATH = get_report_path(TOP_PICKS_FILENAME)
+REPO_TOP_PICKS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'lottery', TOP_PICKS_FILENAME))
 
 
 class handler(BaseHTTPRequestHandler):
@@ -25,7 +26,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            path = TOP_PICKS_PATH
+            path = TOP_PICKS_PATH if os.path.exists(TOP_PICKS_PATH) else REPO_TOP_PICKS_PATH
             if not os.path.exists(path):
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
