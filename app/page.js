@@ -783,6 +783,16 @@ export default function Home() {
     showToast('번호만 복사되었습니다');
   };
 
+  const handleCopyTopGroup = (items, label) => {
+    const text = (items || [])
+      .slice(0, 5)
+      .map((item, idx) => `${idx + 1}. ${item.combo.join(', ')}`)
+      .join('\n');
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    showToast(`${label} 5개 조합이 복사되었습니다`);
+  };
+
   // 번호 선택 토글
   const toggleInclude = (num) => {
     if (excludeNumbers.includes(num)) return;
@@ -868,6 +878,13 @@ export default function Home() {
           {/* 메인 네비게이션 탭 */}
           <nav className="main-nav">
             <button 
+              className={`nav-item ${activeView === 'top' ? 'active' : ''}`}
+              onClick={() => setActiveView('top')}
+            >
+              <Icons.Star />
+              <span>TOP5 추천</span>
+            </button>
+            <button 
               className={`nav-item ${activeView === 'recommend' ? 'active' : ''}`}
               onClick={() => setActiveView('recommend')}
             >
@@ -887,7 +904,7 @@ export default function Home() {
 
       {/* 메인 컨텐츠 영역 */}
       <div className="content-area">
-        {activeView === 'recommend' ? (
+        {activeView === 'top' || activeView === 'recommend' ? (
           <div className="main-grid">
             {/* 설정 패널 */}
             <aside className="settings-panel">
@@ -1081,40 +1098,24 @@ export default function Home() {
 
             {/* 결과 패널 */}
             <main className="results-panel">
-              <div className="tabs" style={{ marginBottom: '20px' }}>
-                <button 
-                  className={`tab-btn ${activeTab === 'top' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('top')}
-                >
-                  TOP5 추천
-                </button>
-                <button 
-                  className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('results')}
-                >
-                  추천 조합
-                </button>
-                <button 
-                  className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('analysis')}
-                >
-                  통계 분석
-                </button>
-              </div>
-
-              {activeTab === 'top' && topPicksData?.weeklyTopPicks?.length > 0 && (
+              {activeView === 'top' && topPicksData?.weeklyTopPicks?.length > 0 && (
                 <>
                   <div className="card" style={{ marginBottom: '20px' }}>
-                    <div className="card-header">
+                    <div className="card-header" style={{ gap: '12px', alignItems: 'flex-start' }}>
                       <div className="card-title">
                         <div className="card-title-icon">
                           <Icons.Star />
                         </div>
                         다음 회차 예측 TOP5
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>
-                        <div>예상 대상 {topPicksData.targetRound || (topPicksData.latestRound ? topPicksData.latestRound + 1 : '-') }회 / 분석 기준 {topPicksData.latestRound}회</div>
-                        <div>공통 점수 기반 상위권 엄선 TOP</div>
+                      <div style={{ marginLeft: 'auto', display: 'grid', gap: '8px', justifyItems: 'end' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                          <div>예상 대상 {topPicksData.targetRound || (topPicksData.latestRound ? topPicksData.latestRound + 1 : '-') }회 / 분석 기준 {topPicksData.latestRound}회</div>
+                          <div>공통 점수 기반 상위권 엄선 TOP</div>
+                        </div>
+                        <button className="action-btn" onClick={() => handleCopyTopGroup(topPicksData.weeklyTopPicks, 'TOP5 추천')} title="TOP5 전체 복사">
+                          <Icons.Copy />
+                        </button>
                       </div>
                     </div>
                     <div className="result-list">
@@ -1131,60 +1132,51 @@ export default function Home() {
                               <span key={tag} className="meta-badge highlight">{tag}</span>
                             ))}
                           </div>
-                          <div className="result-actions">
-                            <button 
-                              className="action-btn"
-                              onClick={() => handleCopyPlainNumbers(item.combo)}
-                              title="번호만 복사"
-                            >
-                              <Icons.Copy />
-                            </button>
-                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {topPicksData && (topPicksData.stableTopPicks?.length > 0 || topPicksData.highHitTopPicks?.length > 0) && (
-                    <div className="stats-grid" style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: '20px' }}>
                       <div className="card">
-                        <div className="card-header">
+                        <div className="card-header" style={{ gap: '12px', alignItems: 'flex-start' }}>
                           <div className="card-title">
                             <Icons.Sparkle />
                             안정형 대표 5개
                           </div>
+                          <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => handleCopyTopGroup(topPicksData.stableTopPicks, '안정형 TOP5')} title="안정형 5개 전체 복사">
+                            <Icons.Copy />
+                          </button>
                         </div>
                         <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
                           {(topPicksData.stableTopPicks || []).slice(0, 5).map((item, idx) => (
-                            <div key={`stable-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                            <div key={`stable-${idx}`} style={{ display: 'grid', gap: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '12px', background: 'var(--bg-secondary)' }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <strong style={{ minWidth: '18px' }}>{idx + 1}</strong>
                                 {item.combo.map(num => <LottoBall key={num} number={num} small />)}
                               </div>
-                              <button className="action-btn" onClick={() => handleCopyPlainNumbers(item.combo)} title="번호만 복사">
-                                <Icons.Copy />
-                              </button>
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="card">
-                        <div className="card-header">
+                        <div className="card-header" style={{ gap: '12px', alignItems: 'flex-start' }}>
                           <div className="card-title">
                             <Icons.StarFilled />
                             고적중형 대표 5개
                           </div>
+                          <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => handleCopyTopGroup(topPicksData.highHitTopPicks, '고적중형 TOP5')} title="고적중형 5개 전체 복사">
+                            <Icons.Copy />
+                          </button>
                         </div>
                         <div className="card-content" style={{ display: 'grid', gap: '10px' }}>
                           {(topPicksData.highHitTopPicks || []).slice(0, 5).map((item, idx) => (
-                            <div key={`high-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                            <div key={`high-${idx}`} style={{ display: 'grid', gap: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '12px', background: 'var(--bg-secondary)' }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)' }}>#{idx + 1}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <strong style={{ minWidth: '18px' }}>{idx + 1}</strong>
                                 {item.combo.map(num => <LottoBall key={num} number={num} small />)}
                               </div>
-                              <button className="action-btn" onClick={() => handleCopyPlainNumbers(item.combo)} title="번호만 복사">
-                                <Icons.Copy />
-                              </button>
                             </div>
                           ))}
                         </div>
