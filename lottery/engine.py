@@ -48,8 +48,16 @@ DEFAULT_SCORE_CONFIG = {
     ],
     'last_seen_default_score': 0,
     'hot_score_weights': {
-        'hot': 1,
+        'overhot': -3,
+        'hot': -1,
         'cold': 2,
+        'undercold': 1,
+    },
+    'rhythm_score_weights': {
+        'overdue_rhythm': 5,
+        'late': 2,
+        'compressed': -2,
+        'normal': 0,
     },
     'carryover_count_scores': {
         1: 12,
@@ -125,6 +133,7 @@ def normalize_score_config(score_config: Dict | None = None) -> Dict:
         'last_seen_weights': [dict(item) for item in DEFAULT_SCORE_CONFIG['last_seen_weights']],
         'last_seen_default_score': DEFAULT_SCORE_CONFIG['last_seen_default_score'],
         'hot_score_weights': dict(DEFAULT_SCORE_CONFIG['hot_score_weights']),
+        'rhythm_score_weights': dict(DEFAULT_SCORE_CONFIG['rhythm_score_weights']),
         'carryover_count_scores': dict(DEFAULT_SCORE_CONFIG['carryover_count_scores']),
         'carryover_default_score': DEFAULT_SCORE_CONFIG['carryover_default_score'],
         'bonus_carryover_count_scores': dict(DEFAULT_SCORE_CONFIG['bonus_carryover_count_scores']),
@@ -144,7 +153,7 @@ def normalize_score_config(score_config: Dict | None = None) -> Dict:
         return merged
 
     for key, value in score_config.items():
-        if key in ['odd_count_scores', 'high_count_scores', 'max_concentration_scores', 'carryover_count_scores', 'bonus_carryover_count_scores', 'frequency_window_weights', 'hot_score_weights']:
+        if key in ['odd_count_scores', 'high_count_scores', 'max_concentration_scores', 'carryover_count_scores', 'bonus_carryover_count_scores', 'frequency_window_weights', 'hot_score_weights', 'rhythm_score_weights']:
             merged[key] = {int(k) if str(k).isdigit() else str(k): int(v) for k, v in value.items()}
         elif key in ['ac_ranges', 'sum_ranges', 'last_seen_weights']:
             merged[key] = [dict(item) for item in value]
@@ -298,7 +307,11 @@ def build_number_feature_map(analysis: Dict | None = None) -> Dict[int, Dict]:
                 'is_carryover': bool(item.get('is_carryover', False)),
                 'is_bonus_carryover': bool(item.get('is_bonus_carryover', False)),
                 'hot_cold_label': str(item.get('hot_cold_label', 'neutral')),
-                'hot_score': int(item.get('hot_score', item.get('hot_cold_score', 0))),
+                'hot_score': float(item.get('hot_score', item.get('hot_cold_score', 0))),
+                'rhythm_label': str(item.get('rhythm_label', 'normal')),
+                'gap_zscore': float(item.get('gap_zscore', 0)),
+                'current_gap': int(item.get('current_gap', item.get('last_seen', -1))),
+                'mean_gap': float(item.get('mean_gap', 0)),
             }
         return normalized
 
@@ -322,7 +335,11 @@ def build_number_feature_map(analysis: Dict | None = None) -> Dict[int, Dict]:
             'is_carryover': num in carryover_numbers,
             'is_bonus_carryover': num in bonus_carryover_numbers,
             'hot_cold_label': 'neutral',
-            'hot_score': 0,
+            'hot_score': 0.0,
+            'rhythm_label': 'normal',
+            'gap_zscore': 0.0,
+            'current_gap': int(last_seen.get(num, -1)),
+            'mean_gap': 0.0,
         }
         profile = hot_cold.get(str(num)) or hot_cold.get(num) or {}
         if profile:
@@ -351,6 +368,7 @@ def score_number_signals(
         'frequency': 0,
         'last_seen': 0,
         'hot_cold': 0,
+        'rhythm': 0,
         'carryover': 0,
         'bonus_carryover': 0,
     }
@@ -376,6 +394,9 @@ def score_number_signals(
 
         label = str(feat.get('hot_cold_label', 'neutral'))
         breakdown['hot_cold'] += int(config.get('hot_score_weights', {}).get(label, 0))
+
+        rhythm_label = str(feat.get('rhythm_label', 'normal'))
+        breakdown['rhythm'] += int(config.get('rhythm_score_weights', {}).get(rhythm_label, 0))
 
     breakdown['count_adjustments'] = _dynamic_signal_bonus_from_counts(
         sum(1 for n in combo if n in overdue_numbers),

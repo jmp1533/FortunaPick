@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import math
 import os
 import statistics
 import sys
@@ -124,24 +125,81 @@ def build_analysis_snapshot(window_draws, previous_draw=None):
             counter.update(draw['winning_numbers'])
         frequency_windows[str(window)] = {num: int(counter.get(num, 0)) for num in range(1, 46)}
 
-    carryover_numbers = previous_draw['winning_numbers'] if previous_draw else []
-    bonus_carryover_numbers = [int(previous_draw['bonus_number'])] if previous_draw else []
+    chronological = list(window_draws)
+    occurrences = {num: [] for num in range(1, 46)}
+    for idx, draw in enumerate(chronological):
+        for num in draw['winning_numbers']:
+            occurrences[num].append(idx)
 
+    latest_index = len(chronological) - 1
+    rhythm_profile = {}
     hot_cold_profile = {}
     number_features = {}
+    carryover_numbers = previous_draw['winning_numbers'] if previous_draw else []
+    bonus_carryover_numbers = [int(previous_draw['bonus_number'])] if previous_draw else []
+    expected_freq = {10: (10 * 6 / 45), 30: (30 * 6 / 45)}
+
     for num in range(1, 46):
-        score = (int(frequency_windows['10'].get(num, 0)) * 3) + int(frequency_windows['30'].get(num, 0))
-        if score >= 12:
+        freq10 = int(frequency_windows['10'].get(num, 0))
+        freq30 = int(frequency_windows['30'].get(num, 0))
+        z_components = []
+        excess_components = []
+        for window, observed in ((10, freq10), (30, freq30)):
+            expected = expected_freq[window]
+            variance = max(expected * (1 - (6 / 45)), 1e-9)
+            z_components.append((observed - expected) / math.sqrt(variance))
+            excess_components.append((observed - expected) / expected)
+        score = round((z_components[0] * 0.65) + (z_components[1] * 0.35), 4)
+        if score >= 2.2:
+            label = 'overhot'
+        elif score >= 1.0:
             label = 'hot'
-        elif score <= 3:
+        elif score <= -1.8:
+            label = 'undercold'
+        elif score <= -0.75:
             label = 'cold'
         else:
             label = 'neutral'
-        hot_cold_profile[num] = {'score': score, 'label': label}
+        hot_cold_profile[num] = {
+            'score': score,
+            'label': label,
+            'zscore_10': round(z_components[0], 4),
+            'zscore_30': round(z_components[1], 4),
+            'excess_ratio': round((excess_components[0] * 0.65) + (excess_components[1] * 0.35), 4),
+        }
+
+        seen = occurrences[num]
+        gaps = [seen[i] - seen[i - 1] for i in range(1, len(seen))]
+        current_gap = (latest_index - seen[-1]) if seen else len(chronological)
+        mean_gap = statistics.mean(gaps) if gaps else float(len(chronological) or 0)
+        gap_std = statistics.pstdev(gaps) if len(gaps) >= 2 else 0.0
+        if gap_std > 0:
+            gap_z = (current_gap - mean_gap) / gap_std
+        elif gaps:
+            gap_z = 1.0 if current_gap > mean_gap else -1.0 if current_gap < mean_gap else 0.0
+        else:
+            gap_z = 0.0
+        if gap_z >= 1.5:
+            rhythm_label = 'overdue_rhythm'
+        elif gap_z >= 0.75:
+            rhythm_label = 'late'
+        elif gap_z <= -1.25:
+            rhythm_label = 'compressed'
+        else:
+            rhythm_label = 'normal'
+        rhythm_profile[num] = {
+            'current_gap': int(current_gap),
+            'mean_gap': round(float(mean_gap), 4),
+            'gap_std': round(float(gap_std), 4),
+            'gap_zscore': round(float(gap_z), 4),
+            'recent_gaps': gaps[-5:],
+            'label': rhythm_label,
+        }
+
         number_features[num] = {
             'number': num,
-            'freq_10': int(frequency_windows['10'].get(num, 0)),
-            'freq_30': int(frequency_windows['30'].get(num, 0)),
+            'freq_10': freq10,
+            'freq_30': freq30,
             'freq_50': int(frequency_windows['50'].get(num, 0)),
             'freq_100': int(frequency_windows['100'].get(num, 0)),
             'last_seen': int(last_seen.get(num, -1)),
@@ -149,11 +207,20 @@ def build_analysis_snapshot(window_draws, previous_draw=None):
             'is_bonus_carryover': num in bonus_carryover_numbers,
             'hot_cold_label': label,
             'hot_score': score,
+            'overheat_z_10': float(hot_cold_profile[num]['zscore_10']),
+            'overheat_z_30': float(hot_cold_profile[num]['zscore_30']),
+            'overheat_excess_ratio': float(hot_cold_profile[num]['excess_ratio']),
+            'rhythm_label': rhythm_label,
+            'current_gap': int(current_gap),
+            'mean_gap': round(float(mean_gap), 4),
+            'gap_std': round(float(gap_std), 4),
+            'gap_zscore': round(float(gap_z), 4),
         }
 
     return {
         'last_seen_draws_ago': last_seen,
         'number_frequency_windows': frequency_windows,
+        'number_rhythm_profile': rhythm_profile,
         'hot_cold_profile': hot_cold_profile,
         'number_features': number_features,
         'carryover_metrics': {
@@ -203,9 +270,69 @@ def evaluate_round(recommendations, target_numbers, bonus_number=None):
     }
 
 
+def build_number_contribution_summary(summaries):
+    contribution = {
+        num: {
+            'number': num,
+            'rounds_exposed': 0,
+            'rounds_hit': 0,
+            'rounds_unique_hit': 0,
+            'combo_exposure': 0,
+            'combo_hit_instances': 0,
+            'baseline_rounds_exposed': 0,
+            'baseline_rounds_hit': 0,
+        }
+        for num in range(1, 46)
+    }
+
+    for item in summaries:
+        target = set(item.get('target_numbers', []))
+        recommended_numbers = set()
+        baseline_numbers = set()
+        for combo in item.get('recommendations', []):
+            combo_set = set(combo)
+            recommended_numbers.update(combo_set)
+            for num in combo_set:
+                contribution[num]['combo_exposure'] += 1
+                if num in target:
+                    contribution[num]['combo_hit_instances'] += 1
+        for combo in item.get('baseline_recommendations', []):
+            baseline_numbers.update(combo)
+
+        for num in recommended_numbers:
+            contribution[num]['rounds_exposed'] += 1
+            if num in target:
+                contribution[num]['rounds_hit'] += 1
+        for num in recommended_numbers & target:
+            contribution[num]['rounds_unique_hit'] += 1
+        for num in baseline_numbers:
+            contribution[num]['baseline_rounds_exposed'] += 1
+            if num in target:
+                contribution[num]['baseline_rounds_hit'] += 1
+
+    ranked = []
+    for num in range(1, 46):
+        item = contribution[num]
+        exposure = item['rounds_exposed']
+        baseline_exposure = item['baseline_rounds_exposed']
+        hit_rate = (item['rounds_hit'] / exposure) if exposure else 0.0
+        baseline_hit_rate = (item['baseline_rounds_hit'] / baseline_exposure) if baseline_exposure else 0.0
+        item['hit_rate'] = round(hit_rate, 4)
+        item['baseline_hit_rate'] = round(baseline_hit_rate, 4)
+        item['hit_rate_delta_vs_baseline'] = round(hit_rate - baseline_hit_rate, 4)
+        ranked.append(item)
+
+    ranked.sort(key=lambda x: (x['rounds_unique_hit'], x['hit_rate_delta_vs_baseline'], x['rounds_hit'], -x['number']), reverse=True)
+    return {
+        'top_positive': ranked[:15],
+        'full': ranked,
+    }
+
+
 def summarize_backtest_run(summaries, aggregate_hits, aggregate_bonus_hits, baseline_aggregate_hits, baseline_aggregate_bonus_hits, milestone_counts, baseline_milestone_counts, started):
     best_hits = [item['best_hit'] for item in summaries]
     baseline_best_hits = [item['baseline']['best_hit'] for item in summaries]
+    number_contribution = build_number_contribution_summary(summaries)
     return {
         'tested_rounds': len(summaries),
         'average_best_hit': round(statistics.mean(best_hits), 4) if best_hits else 0,
@@ -245,6 +372,7 @@ def summarize_backtest_run(summaries, aggregate_hits, aggregate_bonus_hits, base
             'rounds_with_bonus_match_delta': milestone_counts['had_bonus_match'] - baseline_milestone_counts['had_bonus_match'],
         },
         'elapsed_seconds': round(time.time() - started, 2),
+        'number_contribution': number_contribution,
     }
 
 

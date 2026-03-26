@@ -1,5 +1,6 @@
 import math
 import os
+import statistics
 import re
 import zipfile
 import xml.etree.ElementTree as ET
@@ -201,6 +202,7 @@ class LotteryAnalyzer:
         self.analysis_results['last_seen_draws_ago'] = last_seen
         self.analysis_results['group_concentration_distribution'] = Counter(self.df['winning_numbers'].apply(self._get_group_concentration_key))
         self.analysis_results['carryover_metrics'] = self._build_carryover_metrics()
+        self.analysis_results['number_rhythm_profile'] = self._build_number_rhythm_profile(draws_desc)
         self.analysis_results['hot_cold_profile'] = self._build_hot_cold_profile()
         self.analysis_results['number_features'] = self._build_number_features()
 
@@ -214,22 +216,82 @@ class LotteryAnalyzer:
             windows[str(window)] = {num: int(counter.get(num, 0)) for num in range(1, 46)}
         return windows
 
-    def _build_hot_cold_profile(self):
-        freq_windows = self.analysis_results.get('number_frequency_windows', {})
-        freq10 = freq_windows.get('10', {})
-        freq30 = freq_windows.get('30', {})
+    def _build_number_rhythm_profile(self, draws_desc):
+        chronological = list(reversed(draws_desc))
+        occurrences = {num: [] for num in range(1, 46)}
+        for idx, draw in enumerate(chronological):
+            for num in draw['winning_numbers']:
+                occurrences[num].append(idx)
+
+        latest_index = len(chronological) - 1
         profile = {}
         for num in range(1, 46):
-            score = (int(freq10.get(num, 0)) * 3) + int(freq30.get(num, 0))
-            if score >= 12:
+            seen = occurrences[num]
+            gaps = [seen[i] - seen[i - 1] for i in range(1, len(seen))]
+            current_gap = (latest_index - seen[-1]) if seen else len(chronological)
+            mean_gap = statistics.mean(gaps) if gaps else float(len(chronological))
+            gap_std = statistics.pstdev(gaps) if len(gaps) >= 2 else 0.0
+            if gap_std > 0:
+                gap_z = (current_gap - mean_gap) / gap_std
+            elif gaps:
+                gap_z = 1.0 if current_gap > mean_gap else -1.0 if current_gap < mean_gap else 0.0
+            else:
+                gap_z = 0.0
+
+            if gap_z >= 1.5:
+                rhythm_label = 'overdue_rhythm'
+            elif gap_z >= 0.75:
+                rhythm_label = 'late'
+            elif gap_z <= -1.25:
+                rhythm_label = 'compressed'
+            else:
+                rhythm_label = 'normal'
+
+            profile[num] = {
+                'current_gap': int(current_gap),
+                'mean_gap': round(float(mean_gap), 4),
+                'gap_std': round(float(gap_std), 4),
+                'gap_zscore': round(float(gap_z), 4),
+                'recent_gaps': gaps[-5:],
+                'appearance_count': len(seen),
+                'label': rhythm_label,
+            }
+        return profile
+
+    def _build_hot_cold_profile(self):
+        freq_windows = self.analysis_results.get('number_frequency_windows', {})
+        expected_freq = {10: (10 * 6 / 45), 30: (30 * 6 / 45)}
+        profile = {}
+        for num in range(1, 46):
+            freq10 = int(freq_windows.get('10', {}).get(num, 0))
+            freq30 = int(freq_windows.get('30', {}).get(num, 0))
+            z_components = []
+            excess_components = []
+            for window, observed in ((10, freq10), (30, freq30)):
+                expected = expected_freq[window]
+                variance = max(expected * (1 - (6 / 45)), 1e-9)
+                z_components.append((observed - expected) / math.sqrt(variance))
+                excess_components.append((observed - expected) / expected)
+            score = round((z_components[0] * 0.65) + (z_components[1] * 0.35), 4)
+            excess_ratio = round((excess_components[0] * 0.65) + (excess_components[1] * 0.35), 4)
+            if score >= 2.2:
+                label = 'overhot'
+            elif score >= 1.0:
                 label = 'hot'
-            elif score <= 3:
+            elif score <= -1.8:
+                label = 'undercold'
+            elif score <= -0.75:
                 label = 'cold'
             else:
                 label = 'neutral'
             profile[num] = {
                 'score': score,
                 'label': label,
+                'expected_freq_10': round(expected_freq[10], 4),
+                'expected_freq_30': round(expected_freq[30], 4),
+                'zscore_10': round(z_components[0], 4),
+                'zscore_30': round(z_components[1], 4),
+                'excess_ratio': excess_ratio,
             }
         return profile
 
@@ -237,6 +299,7 @@ class LotteryAnalyzer:
         carryover_latest = self.analysis_results.get('carryover_metrics', {}).get('latest', {})
         freq_windows = self.analysis_results.get('number_frequency_windows', {})
         hot_cold = self.analysis_results.get('hot_cold_profile', {})
+        rhythm = self.analysis_results.get('number_rhythm_profile', {})
         last_seen = self.analysis_results.get('last_seen_draws_ago', {})
         carryover_numbers = set(carryover_latest.get('carryover_numbers', []))
         bonus_carryover_numbers = set(carryover_latest.get('bonus_carryover_numbers', []))
@@ -252,8 +315,17 @@ class LotteryAnalyzer:
                 'last_seen': int(last_seen.get(num, -1)),
                 'is_carryover': num in carryover_numbers,
                 'is_bonus_carryover': num in bonus_carryover_numbers,
-                'hot_cold_score': int(hot_cold.get(num, {}).get('score', 0)),
+                'hot_cold_score': float(hot_cold.get(num, {}).get('score', 0)),
                 'hot_cold_label': str(hot_cold.get(num, {}).get('label', 'neutral')),
+                'overheat_z_10': float(hot_cold.get(num, {}).get('zscore_10', 0)),
+                'overheat_z_30': float(hot_cold.get(num, {}).get('zscore_30', 0)),
+                'overheat_excess_ratio': float(hot_cold.get(num, {}).get('excess_ratio', 0)),
+                'rhythm_label': str(rhythm.get(num, {}).get('label', 'normal')),
+                'current_gap': int(rhythm.get(num, {}).get('current_gap', last_seen.get(num, -1))),
+                'mean_gap': float(rhythm.get(num, {}).get('mean_gap', 0)),
+                'gap_std': float(rhythm.get(num, {}).get('gap_std', 0)),
+                'gap_zscore': float(rhythm.get(num, {}).get('gap_zscore', 0)),
+                'recent_gaps': list(rhythm.get(num, {}).get('recent_gaps', [])),
             }
         return features
 

@@ -82,14 +82,15 @@ SCORE_PRESETS = {
         'overdue_weight': 9,
         'carryover_weight': 10,
         'bonus_carryover_weight': 3,
-        'frequency_window_weights': {10: 3, 30: 2, 50: 1, 100: 1},
+        'frequency_window_weights': {10: 1, 30: 1, 50: 1, 100: 1},
         'last_seen_weights': [
             {'min': 8, 'max': 15, 'score': 2},
             {'min': 16, 'max': 24, 'score': 4},
             {'min': 25, 'max': 99, 'score': 7},
         ],
         'hot_score_weights': {
-            'hot': 1,
+            'overhot': -4,
+            'hot': 0,
             'cold': 2,
         },
         'carryover_count_scores': _EMPIRICAL_CARRYOVER_SCORES,
