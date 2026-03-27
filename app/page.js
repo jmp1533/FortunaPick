@@ -786,7 +786,7 @@ export default function Home() {
   const handleCopyTopGroup = (items, label) => {
     const text = (items || [])
       .slice(0, 5)
-      .map((item, idx) => `${idx + 1}. ${item.combo.join(', ')}`)
+      .map((item) => item.combo.join(', '))
       .join('\n');
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -907,6 +907,7 @@ export default function Home() {
         {activeView === 'top' || activeView === 'recommend' ? (
           <div className="main-grid">
             {/* 설정 패널 */}
+            {activeView === 'recommend' && (
             <aside className="settings-panel">
               {/* 번호 선택 카드 */}
               <div className="card">
@@ -1095,6 +1096,7 @@ export default function Home() {
                 </div>
               )}
             </aside>
+            )}
 
             {/* 결과 패널 */}
             <main className="results-panel">
